@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141a26"/>
+      <stop offset="1" stop-color="#0b0e14"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f8cff"/>
+      <stop offset="1" stop-color="#7b5cff"/>
+    </linearGradient>
+    <linearGradient id="heat" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#00d68f"/>
+      <stop offset="0.55" stop-color="#ffb84d"/>
+      <stop offset="1" stop-color="#ff5f56"/>
+    </linearGradient>
+  </defs>
+
+  <!-- maskable safe zone: keep all meaning inside the centre 80% -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- die outline -->
+  <rect x="146" y="146" width="220" height="220" rx="30"
+        fill="none" stroke="#1e2633" stroke-width="10"/>
+
+  <!-- pins -->
+  <g fill="#2c3644">
+    <rect x="176" y="112" width="16" height="36" rx="6"/>
+    <rect x="222" y="112" width="16" height="36" rx="6"/>
+    <rect x="268" y="112" width="16" height="36" rx="6"/>
+    <rect x="314" y="112" width="16" height="36" rx="6"/>
+    <rect x="176" y="364" width="16" height="36" rx="6"/>
+    <rect x="222" y="364" width="16" height="36" rx="6"/>
+    <rect x="268" y="364" width="16" height="36" rx="6"/>
+    <rect x="314" y="364" width="16" height="36" rx="6"/>
+    <rect x="112" y="176" width="36" height="16" rx="6"/>
+    <rect x="112" y="222" width="36" height="16" rx="6"/>
+    <rect x="112" y="268" width="36" height="16" rx="6"/>
+    <rect x="112" y="314" width="36" height="16" rx="6"/>
+    <rect x="364" y="176" width="36" height="16" rx="6"/>
+    <rect x="364" y="222" width="36" height="16" rx="6"/>
+    <rect x="364" y="268" width="36" height="16" rx="6"/>
+    <rect x="364" y="314" width="36" height="16" rx="6"/>
+  </g>
+
+  <!-- core -->
+  <rect x="178" y="178" width="156" height="156" rx="20" fill="url(#core)"/>
+
+  <!-- H monogram -->
+  <path d="M212 212 h22 v42 h44 v-42 h22 v88 h-22 v-24 h-44 v24 h-22 z"
+        fill="#ffffff" opacity="0.95"/>
+
+  <!-- sustained-performance line: rises, then holds flat instead of
+       spiking and collapsing. This is the whole design philosophy. -->
+  <path d="M196 322 L222 306 L248 292 L274 288 L316 288"
+        fill="none" stroke="url(#heat)" stroke-width="9"
+        stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  <circle cx="316" cy="288" r="7" fill="#00d68f"/>
+</svg>

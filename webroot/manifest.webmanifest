@@ -1,0 +1,50 @@
+{
+  "id": "/?hpc",
+  "name": "HPC Kernel Manager",
+  "short_name": "HPC",
+  "description": "Hamedis Performance Core - kernel, thermal and battery manager",
+  "start_url": "/?src=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#0b0e14",
+  "theme_color": "#0b0e14",
+  "dir": "rtl",
+  "lang": "fa",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "وضعیت",
+      "short_name": "وضعیت",
+      "url": "/?tab=0",
+      "description": "نمایش وضعیت زنده"
+    },
+    {
+      "name": "پروفایل",
+      "short_name": "پروفایل",
+      "url": "/?tab=1",
+      "description": "تعویض پروفایل عملکرد"
+    },
+    {
+      "name": "باتری",
+      "short_name": "باتری",
+      "url": "/?tab=4",
+      "description": "سلامت باتری"
+    }
+  ]
+}

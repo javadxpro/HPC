@@ -1,0 +1,6 @@
+id=hamedis_performance_core
+name=Hamedis Performance Core
+version=v1.8.19
+versionCode=10819
+author=Hamedis
+description=Adaptive performance + kernel manager. WebUI on 127.0.0.1:1111 via the Action button. Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal protection, never pins clocks, fully reversible.

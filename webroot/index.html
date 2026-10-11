@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="HPC">
+<meta name="application-name" content="HPC">
+<title>HPC Kernel Manager</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:#0b0e14;color:#e6e8ec;
+ font-family:system-ui,Roboto,sans-serif;overscroll-behavior:none}
+body{display:flex;flex-direction:column;-webkit-user-select:none;user-select:none}
+
+header{padding:11px 14px;background:linear-gradient(135deg,#141a26,#0f1520);
+ border-bottom:1px solid #1e2633;flex-shrink:0;display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:14px;font-weight:600;flex:1;
+ background:linear-gradient(90deg,#4f8cff,#6ee7a0,#4f8cff);
+ background-size:200% auto;-webkit-background-clip:text;background-clip:text;
+ color:transparent;animation:shine 4s linear infinite}
+@keyframes shine{to{background-position:200% center}}
+header .dot{width:8px;height:8px;border-radius:50%;background:#00d68f;flex-shrink:0;
+ animation:dotPulse 2.4s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 0 0 #00d68f44}50%{box-shadow:0 0 0 6px #00d68f00}}
+header .dot.warn{background:#ffb84d}header .dot.hot{background:#ff5f56}
+header small{font-size:10.5px;color:#5c6symbol}
+
+nav{display:flex;background:#10151f;border-bottom:1px solid #1e2633;flex-shrink:0;
+ overflow-x:auto}
+nav button{flex:1;min-width:72px;padding:11px 6px;border:0;background:none;color:#6b7688;
+ font-size:12px;font-family:inherit;border-bottom:2px solid transparent;white-space:nowrap}
+nav button.on{color:#4f8cff;border-bottom-color:#4f8cff}
+nav button{transition:color .2s,border-bottom-color .2s}
+
+main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px}
+.page{display:none}.page.on{display:block}
+
+.card{background:linear-gradient(145deg,#111722f2,#0f1520d9);
+ border:1px solid #1e2633;border-radius:13px;
+ padding:13px;margin-bottom:11px;
+ backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+ transition:border-color .25s,box-shadow .25s}
+.card:hover{border-color:#4f8cff44;box-shadow:0 4px 24px #4f8cff14}
+.card h2{margin:0 0 11px;font-size:12px;font-weight:600;color:#8b97a8;
+ text-transform:uppercase;letter-spacing:.6px}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.stat{background:#0d131d;border:1px solid #1a2130;border-radius:10px;padding:10px}
+.stat .lbl{font-size:10px;color:#6b7688;margin-bottom:4px}
+.stat .val{font-size:19px;font-weight:600;line-height:1.1}
+.stat .val small{font-size:11px;font-weight:400;color:#6b7688}
+.stat.ok .val{color:#00d68f}.stat.warn .val{color:#ffb84d}.stat.hot .val{color:#ff5f56}
+.stat.hot{animation:hotPulse 2s ease-in-out infinite}
+@keyframes hotPulse{0%,100%{border-color:#1a2130}50%{border-color:#ff5f5666}}
+
+.bar{height:5px;background:#1a2130;border-radius:3px;overflow:hidden;margin-top:7px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,#4f8cff,#7b5cff);
+ border-radius:3px;transition:width .4s}
+.bar.g i{background:linear-gradient(90deg,#00b894,#00d68f)}
+.bar.r i{background:linear-gradient(90deg,#ffb84d,#ff5f56)}
+
+.prof{display:flex;flex-direction:column;gap:7px}
+.prof button{display:flex;align-items:center;gap:10px;padding:11px 12px;
+ border:1px solid #1e2633;border-radius:11px;background:#0d131d;color:#e6e8ec;
+ font-family:inherit;text-align:right;width:100%}
+.prof button.on{border-color:#4f8cff;background:#4f8cff18}
+.prof button b{font-size:13px;display:block;margin-bottom:2px}
+.prof button span{font-size:10.5px;color:#6b7688;display:block;line-height:1.4}
+.prof button .tag{margin-right:auto;font-size:9.5px;padding:3px 7px;border-radius:5px;
+ background:#1a2130;color:#8b97a8;white-space:nowrap}
+
+.row{display:flex;align-items:center;justify-content:space-between;
+ padding:9px 0;border-bottom:1px solid #171e2a;font-size:12.5px;gap:10px}
+.row:last-child{border:0}
+.row .k{color:#8b97a8;flex-shrink:0}
+.row .v{color:#e6e8ec;text-align:left;direction:ltr;font-size:11.5px;
+ word-break:break-all}
+
+.slider{margin:13px 0}
+.slider .top{display:flex;justify-content:space-between;font-size:12px;margin-bottom:7px}
+.slider .top b{color:#4f8cff;font-weight:600}
+input[type=range]{width:100%;height:28px;-webkit-appearance:none;background:none}
+input[type=range]::-webkit-slider-runnable-track{height:5px;background:#1a2130;border-radius:3px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;
+ border-radius:50%;background:#4f8cff;margin-top:-8px;border:2px solid #0b0e14}
+.hint{font-size:10.5px;color:#5c6675;line-height:1.6;margin-top:5px}
+
+.btns{display:flex;gap:7px;flex-wrap:wrap}
+.btns button{flex:1;min-width:78px;padding:10px;border:0;border-radius:9px;
+ background:#1a2130;color:#c5cad3;font-family:inherit;font-size:12px}
+.btns button.p{background:#4f8cff;color:#fff;font-weight:600}
+.btns button.d{background:#ff5f5622;color:#ff8f88}
+.btns button:active{opacity:.6}
+
+.seg{display:flex;gap:5px;flex-wrap:wrap}
+.seg button{flex:1;min-width:60px;padding:9px 5px;border:1px solid #1e2633;
+ border-radius:8px;background:#0d131d;color:#8b97a8;font-family:inherit;font-size:11.5px}
+.seg button.on{border-color:#4f8cff;background:#4f8cff20;color:#7fb0ff}
+
+.warn-box{background:#ff5f5614;border:1px solid #ff5f5633;border-radius:10px;
+ padding:10px 12px;font-size:11.5px;color:#ff8f88;line-height:1.7;margin-bottom:11px}
+.info-box{background:#4f8cff12;border:1px solid #4f8cff30;border-radius:10px;
+ padding:10px 12px;font-size:11.5px;color:#7fb0ff;line-height:1.7;margin-bottom:11px}
+.ok-box{background:#00b89414;border:1px solid #00b89433;border-radius:10px;
+ padding:10px 12px;font-size:11.5px;color:#00d68f;line-height:1.7;margin-bottom:11px}
+
+pre{background:#0d131d;border:1px solid #1a2130;border-radius:9px;padding:10px;
+ font-size:10px;line-height:1.6;overflow-x:auto;direction:ltr;text-align:left;
+ color:#8b97a8;max-height:300px;margin:0;white-space:pre-wrap;
+ -webkit-user-select:text;user-select:text}
+
+/* Respect display cutouts and gesture bars when running standalone */
+header{padding-top:calc(11px + env(safe-area-inset-top))}
+main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+
+#install{display:none;align-items:center;gap:10px;padding:11px 13px;
+ margin-bottom:11px;background:linear-gradient(135deg,#4f8cff22,#7b5cff18);
+ border:1px solid #4f8cff44;border-radius:12px}
+#install.on{display:flex}
+#install img{width:36px;height:36px;flex-shrink:0}
+#install .txt{flex:1;min-width:0}
+#install b{display:block;font-size:12.5px;margin-bottom:2px}
+#install span{font-size:10.5px;color:#8b97a8;line-height:1.5;display:block}
+#install button{border:0;border-radius:8px;background:#4f8cff;color:#fff;
+ padding:9px 14px;font-family:inherit;font-size:12px;font-weight:600;flex-shrink:0}
+#install .x{background:none;color:#5c6675;padding:9px 4px;font-size:16px}
+
+#toast{position:fixed;bottom:calc(18px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(80px);
+ background:#1e2633;border:1px solid #2c3644;color:#e6e8ec;padding:11px 18px;
+ border-radius:11px;font-size:12.5px;z-index:99;transition:transform .25s;
+ box-shadow:0 8px 28px #0008;max-width:88vw;text-align:center}
+#toast.on{transform:translateX(-50%) translateY(0)}
+#toast.err{border-color:#ff5f5655;color:#ff8f88}
+#toast.ok{border-color:#00b89455;color:#00d68f}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="dot"></span>
+  <h1>HPC Kernel Manager</h1>
+  <small id="hdrVer" style="color:#5c6675;margin-left:6px"></small>
+  <small id="hdrTemp">—</small>
+</header>
+
+<nav>
+  <button class="on" onclick="tab(0)">وضعیت</button>
+  <button onclick="tab(1)">پروفایل</button>
+  <button onclick="tab(2)">تنظیم دستی</button>
+  <button onclick="tab(3)">کرنل</button>
+  <button onclick="tab(4)">باتری</button>
+  <button onclick="tab(5)">لاگ</button>
+</nav>
+
+<main>
+
+<!-- ══════════ وضعیت ══════════ -->
+<div class="page on" id="p0">
+  <div id="install">
+    <img src="/icon.svg" alt="">
+    <div class="txt">
+      <b>نصب به‌عنوان برنامه</b>
+      <span>بدون نوار آدرس و تب مرورگر باز می‌شود</span>
+    </div>
+    <button onclick="doInstall()">نصب</button>
+    <button class="x" onclick="hideInstall()">✕</button>
+  </div>
+
+  <div class="card">
+    <h2>زنده</h2>
+    <div class="grid">
+      <div class="stat" id="sTemp"><div class="lbl">دمای SoC</div><div class="val">—</div>
+        <div class="bar r"><i style="width:0"></i></div></div>
+      <div class="stat" id="sBatt"><div class="lbl">باتری</div><div class="val">—</div>
+        <div class="bar g"><i style="width:0"></i></div></div>
+      <div class="stat" id="sCpu"><div class="lbl">فرکانس CPU</div><div class="val">—</div>
+        <div class="bar"><i style="width:0"></i></div></div>
+      <div class="stat" id="sGpu"><div class="lbl">بار GPU</div><div class="val">—</div>
+        <div class="bar"><i style="width:0"></i></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>سیستم</h2>
+    <div class="row"><span class="k">پروفایل</span><span class="v" id="vProf">—</span></div>
+    <div class="row"><span class="k">بازی فعال</span><span class="v" id="vGame">—</span></div>
+    <div class="row"><span class="k">حالت حرارتی</span><span class="v" id="vTherm">—</span></div>
+    <div class="row"><span class="k">گاورنر</span><span class="v" id="vGov">—</span></div>
+    <div class="row"><span class="k">رندرر</span><span class="v" id="vRend">—</span></div>
+    <div class="row"><span class="k">حافظه</span><span class="v" id="vRam">—</span></div>
+  </div>
+
+  <div class="card">
+    <h2>عملیات سریع</h2>
+    <div class="btns">
+      <button class="p" onclick="act('game')">حالت بازی</button>
+      <button onclick="act('stopgame')">پایان بازی</button>
+      <button onclick="act('reload')">بارگذاری مجدد</button>
+      <button class="d" onclick="if(confirm('همه مقادیر به حالت اولیه برگردد؟'))act('reset')">ریست</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ پروفایل ══════════ -->
+<div class="page" id="p1">
+  <div class="info-box" id="profHint">
+    پروفایل فعال روی همهٔ هسته‌ها، GPU، زمان‌بند و آستانه‌های حرارتی اعمال می‌شود.
+  </div>
+  <div class="card"><h2>انتخاب پروفایل</h2><div class="prof" id="profList"></div></div>
+</div>
+
+<!-- ══════════ تنظیم دستی ══════════ -->
+<div class="page" id="p2">
+  <div class="info-box">
+    تنظیمات تخصصی. مقادیر بلافاصله ذخیره و اعمال می‌شوند.
+    محدودهٔ مجاز به‌صورت سخت‌افزاری محدود شده تا تنظیم خطرناک ممکن نباشد.
+  </div>
+  <div class="card">
+    <h2>پروفایل هدف</h2>
+    <div class="seg" id="tuneTarget"></div>
+  </div>
+  <div class="card">
+    <h2>فرکانس</h2>
+    <div class="slider">
+      <div class="top"><span>سقف CPU</span><b id="lCpuMax">—</b></div>
+      <input type="range" id="rCpuMax" min="30" max="100" step="5"
+             oninput="lbl('lCpuMax',this.value+'%')" onchange="tune('CPU_MAX_PERCENT',this.value)">
+      <div class="hint">درصدی از بازهٔ فرکانس سخت‌افزار. بالای ۷۰٪ مصرف و گرما خیلی سریع‌تر از سرعت بالا می‌رود.</div>
+    </div>
+    <div class="slider">
+      <div class="top"><span>کف CPU</span><b id="lCpuMin">—</b></div>
+      <input type="range" id="rCpuMin" min="0" max="60" step="5"
+             oninput="lbl('lCpuMin',this.value+'%')" onchange="tune('CPU_MIN_PERCENT',this.value)">
+      <div class="hint">کف بالاتر = کلاک بین فریم‌ها سقوط نمی‌کند. برای فریم‌ریت پایدار مفید، ولی مصرف بیکاری بیشتر.</div>
+    </div>
+    <div class="slider">
+      <div class="top"><span>سقف GPU</span><b id="lGpuMax">—</b></div>
+      <input type="range" id="rGpuMax" min="30" max="100" step="5"
+             oninput="lbl('lGpuMax',this.value+'%')" onchange="tune('GPU_MAX_PERCENT',this.value)">
+    </div>
+    <div class="slider">
+      <div class="top"><span>کف GPU</span><b id="lGpuMin">—</b></div>
+      <input type="range" id="rGpuMin" min="0" max="60" step="5"
+             oninput="lbl('lGpuMin',this.value+'%')" onchange="tune('GPU_MIN_PERCENT',this.value)">
+    </div>
+  </div>
+  <div class="card">
+    <h2>آستانه‌های حرارتی</h2>
+    <div class="slider">
+      <div class="top"><span>گرم (WARM)</span><b id="lWarm">—</b></div>
+      <input type="range" id="rWarm" min="35" max="85" step="1"
+             oninput="lbl('lWarm',this.value+'°C')" onchange="tune('TEMP_WARM',this.value)">
+    </div>
+    <div class="slider">
+      <div class="top"><span>داغ (HOT)</span><b id="lHot">—</b></div>
+      <input type="range" id="rHot" min="35" max="85" step="1"
+             oninput="lbl('lHot',this.value+'°C')" onchange="tune('TEMP_HOT',this.value)">
+    </div>
+    <div class="slider">
+      <div class="top"><span>بحرانی (CRITICAL)</span><b id="lCrit">—</b></div>
+      <input type="range" id="rCrit" min="35" max="85" step="1"
+             oninput="lbl('lCrit',this.value+'°C')" onchange="tune('TEMP_CRITICAL',this.value)">
+      <div class="hint">حفاظت حرارتی کرنل همیشه فعال می‌ماند و بالای این مقادیر خودش دخالت می‌کند. این‌ها فقط تعیین می‌کنند HPC چه زمانی زودتر عقب بکشد.</div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>پیشرفته</h2>
+    <div class="slider">
+      <div class="top"><span>تایمر بیکاری GPU</span><b id="lIdle">—</b></div>
+      <input type="range" id="rIdle" min="30" max="250" step="10"
+             oninput="lbl('lIdle',this.value+'ms')" onchange="tune('GPU_IDLE_TIMER',this.value)">
+      <div class="hint">بالاتر = GPU بین فریم‌ها خاموش نمی‌شود. برای فریم‌ریت بالا مفید، مصرف بیشتر.</div>
+    </div>
+    <div class="slider">
+      <div class="top"><span>فاصلهٔ نمونه‌برداری</span><b id="lPoll">—</b></div>
+      <input type="range" id="rPoll" min="15" max="120" step="5"
+             oninput="lbl('lPoll',this.value+'s')" onchange="tune('POLL_INTERVAL',this.value)">
+    </div>
+    <div class="slider">
+      <div class="top"><span>swappiness</span><b id="lSwap">—</b></div>
+      <input type="range" id="rSwap" min="0" max="200" step="10"
+             oninput="lbl('lSwap',this.value)" onchange="tune('VM_SWAPPINESS',this.value)">
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ کرنل ══════════ -->
+<div class="page" id="p3">
+  <div class="card">
+    <h2>زمان‌بند I/O</h2>
+    <div class="seg" id="ioSeg"></div>
+    <div class="hint" style="margin-top:9px">فقط زمان‌بندهایی که کرنل واقعاً ارائه می‌دهد نمایش داده می‌شوند.</div>
+  </div>
+  <div class="card">
+    <h2>کنترل ازدحام TCP</h2>
+    <div class="seg" id="tcpSeg"></div>
+  </div>
+  <div class="card">
+    <h2>اطلاعات</h2>
+    <div class="row"><span class="k">read-ahead</span><span class="v" id="kRa">—</span></div>
+    <div class="row"><span class="k">zRAM</span><span class="v" id="kZram">—</span></div>
+    <div class="row"><span class="k">SELinux</span><span class="v" id="kSel">—</span></div>
+  </div>
+</div>
+
+<!-- ══════════ باتری ══════════ -->
+<div class="page" id="p4">
+  <div class="warn-box" id="battWarn" style="display:none"></div>
+  <div class="card">
+    <h2>سلامت</h2>
+    <div class="row"><span class="k">وضعیت</span><span class="v" id="bHealth">—</span></div>
+    <div class="row"><span class="k">جریان فعلی</span><span class="v" id="bRate">—</span></div>
+    <div class="row"><span class="k">دما</span><span class="v" id="bTemp">—</span></div>
+    <div class="hint" style="margin-top:9px">این صفحه فقط وضعیت باتری را نمایش می‌دهد. شارژ با تنظیمات پیش‌فرض سازنده انجام می‌شود و مدیریت حرارتی SoC توسط پروفایل‌ها کنترل می‌شود.</div>
+  </div>
+</div>
+
+<!-- ══════════ لاگ ══════════ -->
+<div class="page" id="p5">
+  <div class="card">
+    <h2>لاگ اخیر</h2>
+    <pre id="logOut">در حال بارگذاری…</pre>
+    <div class="btns" style="margin-top:10px"><button onclick="loadLog()">تازه‌سازی</button></div>
+  </div>
+</div>
+
+</main>
+<div id="toast"></div>
+
+<script>
+const API='/cgi-bin/api.sh';
+let cur=0, curProf='', tuneProf='', timer=null;
+
+const q=(s)=>document.querySelector(s);
+const lbl=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+
+// BUG FIX (v1.8.4): every failure collapsed into one message, "خطای
+// ارتباط", whether the server was down, the CGI was not executable
+// (busybox answers 404), or the JSON was malformed. That single string
+// made a real bug impossible to diagnose from the phone.
+// Each case now reports what actually happened.
+async function api(a,extra=''){
+  let r;
+  try{
+    r=await fetch(`${API}?action=${a}${extra}&_=${Date.now()}`);
+  }catch(e){
+    toast('سرور پاسخ نمی‌دهد — WebUI خاموش است؟','err');
+    return null;
+  }
+  if(!r.ok){
+    toast(r.status===404
+      ? 'خطای ۴۰۴ — api.sh اجرایی نیست (chmod 755)'
+      : `خطای سرور: ${r.status}`,'err');
+    return null;
+  }
+  const txt=await r.text();
+  let d;
+  try{
+    d=JSON.parse(txt);
+  }catch(e){
+    console.error('bad JSON from api.sh:',txt);
+    toast('پاسخ خراب از api.sh — لاگ کنسول را ببین','err');
+    return null;
+  }
+  // The backend reached us but could not do its job. Show ITS message.
+  if(d && d.error){ toast(d.error,'err'); return null; }
+  return d;
+}
+
+function toast(m,c=''){
+  const t=q('#toast'); t.textContent=m; t.className='on '+c;
+  setTimeout(()=>t.className='',2200);
+}
+
+function tab(i){
+  cur=i;
+  document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('on',i===j));
+  document.querySelectorAll('.page').forEach((p,j)=>p.classList.toggle('on',i===j));
+  if(i===1) loadProfiles();
+  if(i===2) loadTune();
+  if(i===3) loadKernel();
+  if(i===4) loadBattery();
+  if(i===5) loadLog();
+}
+
+// ───────── status
+async function loadStatus(){
+  const d=await api('status'); if(!d) return;
+  curProf=d.profile||'';
+
+  const t=d.soc_temp;
+  const ts=q('#sTemp');
+  ts.querySelector('.val').innerHTML = t!=null ? `${t}<small>°C</small>` : '—';
+  ts.className='stat '+(t==null?'':t>=65?'hot':t>=52?'warn':'ok');
+  ts.querySelector('i').style.width = t!=null ? Math.min(100,t/90*100)+'%' : '0';
+  q('#hdrTemp').textContent = t!=null ? t+'°C' : '';
+  if(d.version) q('#hdrVer').textContent='v'+d.version;
+  q('#dot').className='dot '+(t==null?'':t>=65?'hot':t>=52?'warn':'');
+
+  const b=d.battery, bs=q('#sBatt');
+  bs.querySelector('.val').innerHTML = b!=null
+    ? `${b}<small>%${d.charging?' ⚡':''}</small>` : '—';
+  bs.querySelector('i').style.width = b!=null ? b+'%' : '0';
+
+  const cs=q('#sCpu');
+  cs.querySelector('.val').innerHTML = d.cpu_cur
+    ? `${Math.round(d.cpu_cur/1000)}<small>MHz</small>` : '—';
+  if(d.cpu_cur&&d.cpu_max)
+    cs.querySelector('i').style.width=(d.cpu_cur/d.cpu_max*100)+'%';
+
+  const gs=q('#sGpu');
+  gs.querySelector('.val').innerHTML = d.gpu_busy!=null
+    ? `${d.gpu_busy}<small>%</small>` : '—';
+  if(d.gpu_busy!=null) gs.querySelector('i').style.width=d.gpu_busy+'%';
+
+  q('#vProf').textContent=(d.profile||'—').toUpperCase();
+  q('#vGame').textContent=d.game||'هیچ';
+  q('#vTherm').textContent=(d.thermal_state||'—')+(d.thermal_step>0?` (پله ${d.thermal_step}/3)`:'');
+  q('#vGov').textContent=d.governor||'—';
+  q('#vRend').textContent=d.renderer||'—';
+  q('#vRam').textContent=d.ram||'—';
+}
+
+// ───────── profiles
+const PROF_FA={cool:'خنک',balanced:'متعادل',performance:'عملکرد',
+               gaming90:'گیمینگ ۹۰',gaming120:'گیمینگ ۱۲۰'};
+async function loadProfiles(){
+  const d=await api('profiles'); if(!d) return;
+  q('#profList').innerHTML=d.list.map(p=>`
+    <button class="${p.id===d.current?'on':''}" onclick="setProf('${p.id}')">
+      <div><b>${PROF_FA[p.id]||p.id}</b><span>${p.desc||''}</span></div>
+      <span class="tag">${p.cpu_max}% · ${p.warm}°C</span>
+    </button>`).join('');
+}
+async function setProf(p){
+  const r=await api('setprofile','&value='+p);
+  if(r&&r.ok){
+    toast(r.applied!==r.requested
+      ? `${PROF_FA[r.applied]} اعمال شد (سیاست باتری)` : `${PROF_FA[p]||p} فعال شد`,'ok');
+    loadProfiles(); loadStatus();
+  } else toast('اعمال نشد','err');
+}
+
+// ───────── manual tuning
+async function loadTune(){
+  const d=await api('profiles'); if(!d) return;
+  if(!tuneProf) tuneProf=d.current;
+  q('#tuneTarget').innerHTML=d.list.map(p=>
+    `<button class="${p.id===tuneProf?'on':''}" onclick="pickTune('${p.id}')">${PROF_FA[p.id]||p.id}</button>`).join('');
+  const v=await api('profile_detail','&value='+tuneProf);
+  if(!v||!v.ok) return;
+  const s=v.values;
+  const set=(rid,lid,key,suf)=>{
+    if(s[key]==null) return;
+    const r=document.getElementById(rid); if(r) r.value=s[key];
+    lbl(lid, suf==='%'?s[key]+'%':suf==='c'?s[key]+'°C':suf==='ms'?s[key]+'ms':
+             suf==='s'?s[key]+'s':s[key]);
+  };
+  set('rCpuMax','lCpuMax','CPU_MAX_PERCENT','%');
+  set('rCpuMin','lCpuMin','CPU_MIN_PERCENT','%');
+  set('rGpuMax','lGpuMax','GPU_MAX_PERCENT','%');
+  set('rGpuMin','lGpuMin','GPU_MIN_PERCENT','%');
+  set('rWarm','lWarm','TEMP_WARM','c');
+  set('rHot','lHot','TEMP_HOT','c');
+  set('rCrit','lCrit','TEMP_CRITICAL','c');
+  set('rIdle','lIdle','GPU_IDLE_TIMER','ms');
+  set('rPoll','lPoll','POLL_INTERVAL','s');
+  set('rSwap','lSwap','VM_SWAPPINESS','');
+}
+function pickTune(p){ tuneProf=p; loadTune(); }
+async function tune(k,v){
+  const r=await api('tune',`&profile=${tuneProf}&key=${k}&value=${v}`);
+  if(r&&r.ok){
+    toast(`${k} = ${r.value}`,'ok');
+    if(r.value!=v) loadTune();
+    loadStatus();
+  } else toast(r&&r.error?r.error:'ذخیره نشد','err');
+}
+
+// ───────── kernel
+async function loadKernel(){
+  const d=await api('kernel'); if(!d) return;
+  const ios=(d.io_available||'').trim().split(/\s+/).filter(Boolean);
+  q('#ioSeg').innerHTML = ios.length
+    ? ios.map(s=>`<button class="${s===d.io?'on':''}" onclick="setIo('${s}')">${s}</button>`).join('')
+    : '<div class="hint">کرنل زمان‌بند قابل تغییری ارائه نمی‌دهد</div>';
+  const tcps=(d.tcp_available||'').trim().split(/\s+/).filter(Boolean);
+  q('#tcpSeg').innerHTML = tcps.length
+    ? tcps.map(s=>`<button class="${s===d.tcp?'on':''}" onclick="setTcp('${s}')">${s}</button>`).join('')
+    : '<div class="hint">در دسترس نیست</div>';
+  q('#kRa').textContent=d.read_ahead!=null?d.read_ahead+' KB':'—';
+  q('#kZram').textContent=d.zram||'—';
+  q('#kSel').textContent=d.selinux?'enforcing':'permissive';
+}
+async function setIo(v){
+  const r=await api('setio','&value='+v);
+  toast(r&&r.ok?'زمان‌بند: '+v:'پشتیبانی نمی‌شود', r&&r.ok?'ok':'err');
+  loadKernel();
+}
+async function setTcp(v){
+  const r=await api('settcp','&value='+v);
+  toast(r&&r.ok?'TCP: '+v:'پشتیبانی نمی‌شود', r&&r.ok?'ok':'err');
+  loadKernel();
+}
+
+// ───────── battery
+async function loadBattery(){
+  const k=await api('kernel'), s=await api('status');
+  if(!k||!s) return;
+  q('#bHealth').textContent=k.battery_health||'—';
+  q('#bRate').textContent=s.charge_rate!=null?s.charge_rate+' mA':'—';
+  q('#bTemp').textContent=s.battery_temp!=null?s.battery_temp+'°C':'—';
+  const w=q('#battWarn');
+  if(s.battery_temp!=null&&s.battery_temp>=40){
+    w.style.display='block';
+    w.innerHTML='⚠ دمای باتری '+s.battery_temp+'°C — از شارژ جدا کن و بگذار خنک شود.';
+  } else w.style.display='none';
+}
+
+// ───────── log
+async function loadLog(){
+  const d=await api('log');
+  q('#logOut').textContent = d&&d.lines&&d.lines.length
+    ? d.lines.join('\n') : 'لاگی موجود نیست';
+}
+
+async function act(c){
+  const r=await api('do','&value='+c);
+  toast(r&&r.ok?'انجام شد':'ناموفق', r&&r.ok?'ok':'err');
+  loadStatus();
+}
+
+// ───────── PWA
+const STANDALONE = window.matchMedia('(display-mode: standalone)').matches
+                || window.navigator.standalone === true
+                || new URLSearchParams(location.search).get('src')==='pwa';
+
+let deferredPrompt=null;
+
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+
+window.addEventListener('beforeinstallprompt',(e)=>{
+  e.preventDefault();
+  deferredPrompt=e;
+  // Do not nag someone who already installed, or who dismissed it.
+  if(!STANDALONE && localStorage.getItem('hpc_install_hidden')!=='1'){
+    q('#install').classList.add('on');
+  }
+});
+
+async function doInstall(){
+  if(!deferredPrompt){
+    toast('از منوی مرورگر: افزودن به صفحهٔ اصلی');
+    return;
+  }
+  deferredPrompt.prompt();
+  const r=await deferredPrompt.userChoice;
+  deferredPrompt=null;
+  q('#install').classList.remove('on');
+  if(r && r.outcome==='accepted') toast('نصب شد','ok');
+}
+function hideInstall(){
+  localStorage.setItem('hpc_install_hidden','1');
+  q('#install').classList.remove('on');
+}
+window.addEventListener('appinstalled',()=>{
+  q('#install').classList.remove('on');
+  localStorage.setItem('hpc_install_hidden','1');
+});
+
+// Deep links from the manifest shortcuts: /?tab=4 opens the battery tab.
+(function(){
+  const t=parseInt(new URLSearchParams(location.search).get('tab'),10);
+  if(!isNaN(t) && t>=0 && t<=5) tab(t);
+})();
+
+// ───────── boot
+loadStatus();
+
+// Pause polling while hidden. In standalone mode the app stays resident,
+// so without this it would keep waking the CPU every 3s in the
+// background - the exact opposite of what a thermal tool should do.
+function startPolling(){
+  if(timer) return;
+  timer=setInterval(()=>{ if(cur===0 && !document.hidden) loadStatus(); },3000);
+}
+function stopPolling(){ clearInterval(timer); timer=null; }
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden) stopPolling();
+  else { loadStatus(); startPolling(); }
+});
+startPolling();
+</script>
+</body>
+</html>
