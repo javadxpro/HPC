@@ -81,6 +81,20 @@ LAYOUTS = {
             "dtb_size": 1152, "dtb_offset": 1160,
         },
     },
+    "qcom_v2": {  # QCOM EDK2 ABL layout (QcomModulePkg BootImage.h) - what vayu's ABL parses
+        "version": 2, "header_size": 4096,
+        "fields": {
+            "kernel_size": 8, "kernel_addr": 12,
+            "ramdisk_size": 16, "ramdisk_addr": 20,
+            "second_size": 24, "second_addr": 28,
+            "tags_addr": 32, "page_size": 36, "header_version": 40,
+            "os_version": 44,
+            "name": "S:16@48",
+            "cmdline": "S:512@64",
+            "recovery_dtbo_size": 1632, "recovery_dtbo_offset": 1636,
+            "header_size_field": 1644, "dtb_size": 1648, "dtb_addr": 1652,
+        },
+    },
     "custom_hamedis_v2": {  # layout used by the first custom build (osm0sis-style)
         "version": 2, "header_size": 0x1000,
         "fields": {
