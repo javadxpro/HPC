@@ -1,10 +1,11 @@
 # Hamedis Performance Core (HPC)
 
-Adaptive performance + kernel manager as a Magisk module for Android.
+Adaptive performance + kernel manager + cleaner & speed booster as a
+Magisk module for Android.
 Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal
 protection, never pins clocks, fully reversible.
 
-- **Version:** v1.8.18 (versionCode 10818)
+- **Version:** v1.9.0 (versionCode 10900)
 - **WebUI:** `http://127.0.0.1:1111` — loopback only, started by the
   Magisk **Action** button (`action.sh`) or at boot (`WEBUI_AUTOSTART=1`)
 - **CLI:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh [command]`
@@ -25,6 +26,17 @@ protection, never pins clocks, fully reversible.
   performance when the battery itself runs hot.
 - **Kernel manager** — I/O scheduler, TCP congestion control, zRAM
   reporting, read-only battery health / charge-rate reporting.
+- **Cleaner** — root cleanup of regenerable system junk (tmp files, ANR /
+  tombstone reports, cache partition, thumbnail caches, ART cache in deep
+  mode). The target list is hardcoded in `cleaner.sh`; user data is never
+  touched. One-tap RAM housekeeping (logcat clear + drop clean page
+  caches).
+- **Speed booster** — one-tap speed mode: performance profile (via the
+  profile engine, so the service keeps authority) + I/O scheduler
+  `none` for UFS + VM speed values (swappiness/cache pressure) +
+  system animation scales off + MIUI "memory extension" off (probed,
+  best-effort). Fully reversible: "speed off" restores every original
+  value and the baseline profile.
 - **Session monitor** — opt-in CSV recording of gaming sessions with
   report and side-by-side comparison, so tuning is judged on data.
 - **WebUI** — Persian (RTL) PWA served by busybox httpd on 127.0.0.1,

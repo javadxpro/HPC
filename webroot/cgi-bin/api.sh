@@ -127,7 +127,7 @@ ACTION=$(qs_get action)
 # Reject anything that is not a known action before it reaches dispatch.
 case "$ACTION" in
     status|profiles|profile_detail|kernel|games|setprofile|\
-    setio|settcp|tune|do|log|ping) ;;
+    setio|settcp|tune|do|log|ping|clean|cleanrun|ramclean|boost|boostset) ;;
     *) printf '{"error":"invalid action"}'; exit 0 ;;
 esac
 
@@ -408,6 +408,99 @@ api_log() {
     printf ']}'
 }
 
+# -------------------------------------------------------------- cleaner
+# Scan: sizes of every cleanable target (no deletion).
+api_clean() {
+    _acf_free=$(cleaner_storage_free_kb /data)
+    _acr_free=$(cleaner_storage_free_kb /cache)
+    _asd_free=$(cleaner_storage_free_kb /sdcard)
+    printf '{'
+    printf '"free_data":%s,'  "$(jnum "$_acf_free")"
+    printf '"free_cache":%s,' "$(jnum "$_acr_free")"
+    printf '"free_sdcard":%s,' "$(jnum "$_asd_free")"
+    printf '"quick":%s,' "$(cleaner_scan_json quick)"
+    printf '"deep":%s'   "$(cleaner_scan_json deep)"
+    printf '}'
+}
+
+# Run a cleanup. value=quick|deep (whitelisted - the target list itself
+# is hardcoded in cleaner.sh, never user-supplied).
+api_cleanrun() {
+    _acl_mode=$(qs_get value)
+    case "$_acl_mode" in
+        quick|deep) ;;
+        *) printf '{"ok":false,"error":"bad mode"}'; return ;;
+    esac
+    # Free space before, so the reply can state the real delta.
+    _acl_before=$(cleaner_storage_free_kb /data)
+    _acl_kb=$(cleaner_run "$_acl_mode")
+    _acl_after=$(cleaner_storage_free_kb /data)
+    _acl_delta=0
+    case "$_acl_before" in ''|*[!0-9]*) ;; *)
+        case "$_acl_after" in ''|*[!0-9]*) ;; *)
+            _acl_delta=$(( _acl_after - _acl_before )) ;;
+        esac ;;
+    esac
+    printf '{"ok":true,"mode":%s,"freed_kb":%s,"delta_kb":%s,"free_data":%s}' \
+        "$(jstr "$_acl_mode")" "$(jnum "$_acl_kb")" \
+        "$(jnum "$_acl_delta")" "$(jnum "$_acl_after")"
+}
+
+# RAM housekeeping (logcat clear + drop clean page caches).
+api_ramclean() {
+    if [ "$(cleaner_ram)" = "ok" ]; then
+        printf '{"ok":true}'
+    else
+        printf '{"ok":false,"error":"unsupported"}'
+    fi
+}
+
+# -------------------------------------------------------------- booster
+api_boost() {
+    _ab_gov=""
+    for _ab_p in $(detect_policies); do
+        _ab_gov=$(read_node "$_ab_p/scaling_governor" 2>/dev/null)
+        [ -n "$_ab_gov" ] && break
+    done
+    _ab_io=$(km_io_current 2>/dev/null)
+    _ab_anim=$(booster_anim_value 2>/dev/null)
+    _ab_swap=$(read_node /proc/sys/vm/swappiness 2>/dev/null)
+    _ab_vfs=$(read_node /proc/sys/vm/vfs_cache_pressure 2>/dev/null)
+    _ab_mem=$(booster_memext_state 2>/dev/null)
+    _ab_act=false; booster_active 2>/dev/null && _ab_act=true
+    _ab_prof=$(current_profile 2>/dev/null)
+
+    printf '{'
+    printf '"active":%s,'        "$_ab_act"
+    printf '"profile":%s,'       "$(jstr "$_ab_prof")"
+    printf '"governor":%s,'      "$(jstr "$_ab_gov")"
+    printf '"io":%s,'            "$(jstr "$_ab_io")"
+    printf '"animations":%s,'    "$(jstr "$_ab_anim")"
+    printf '"swappiness":%s,'    "$(jnum "$_ab_swap")"
+    printf '"cache_pressure":%s,' "$(jnum "$_ab_vfs")"
+    printf '"virtual_ram":%s'    "$(jstr "$_ab_mem")"
+    printf '}'
+}
+
+# value is a strict whitelist; anything else is rejected.
+api_boostset() {
+    _abs_v=$(qs_get value)
+    case "$_abs_v" in
+        speed_on|speed_off|anim_on|anim_off|vm_on|vm_off|memext_on|memext_off) ;;
+        *) printf '{"ok":false,"error":"unknown"}'; return ;;
+    esac
+    case "$_abs_v" in
+        speed_on)   booster_speed_on;  printf '{"ok":true,"mode":"speed_on"}' ;;
+        speed_off)  booster_speed_off; printf '{"ok":true,"mode":"speed_off"}' ;;
+        anim_on)    if booster_anim_on;  then printf '{"ok":true}'; else printf '{"ok":false,"error":"settings unavailable"}'; fi ;;
+        anim_off)   if booster_anim_off; then printf '{"ok":true}'; else printf '{"ok":false,"error":"settings unavailable"}'; fi ;;
+        vm_on)      if booster_vm_on;   then printf '{"ok":true}'; else printf '{"ok":false,"error":"not supported"}'; fi ;;
+        vm_off)     booster_vm_off;     printf '{"ok":true}' ;;
+        memext_on)  if booster_memext_on;  then printf '{"ok":true}'; else printf '{"ok":false,"error":"not found on this ROM"}'; fi ;;
+        memext_off) if booster_memext_off; then printf '{"ok":true}'; else printf '{"ok":false,"error":"not found on this ROM"}'; fi ;;
+    esac
+}
+
 # -------------------------------------------------------------- router
 case "$ACTION" in
     status)        api_status ;;
@@ -422,5 +515,10 @@ case "$ACTION" in
     do)            api_action ;;
     log)           api_log ;;
     ping)          api_ping ;;
+    clean)         api_clean ;;
+    cleanrun)      api_cleanrun ;;
+    ramclean)      api_ramclean ;;
+    boost)         api_boost ;;
+    boostset)      api_boostset ;;
     *)             printf '{"error":"unknown action"}' ;;
 esac

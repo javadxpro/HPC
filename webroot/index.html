@@ -156,7 +156,9 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   <button onclick="tab(2)">تنظیم دستی</button>
   <button onclick="tab(3)">کرنل</button>
   <button onclick="tab(4)">باتری</button>
-  <button onclick="tab(5)">لاگ</button>
+  <button onclick="tab(5)">پاکسازی</button>
+  <button onclick="tab(6)">بست سرعت</button>
+  <button onclick="tab(7)">لاگ</button>
 </nav>
 
 <main>
@@ -322,8 +324,91 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   </div>
 </div>
 
-<!-- ══════════ لاگ ══════════ -->
+<!-- ══════════ پاکسازی ══════════ -->
 <div class="page" id="p5">
+  <div class="info-box">
+    فقط کاشه‌ها و فایل‌های زائدی پاک می‌شود که سیستم خودش دوباره می‌سازد.
+    <b>عکس، ویدیو، سند و دادهٔ برنامه‌های شما دست‌نخورده می‌ماند.</b>
+  </div>
+  <div class="card">
+    <h2>فضای خالی</h2>
+    <div class="row"><span class="k">داده (/data)</span><span class="v" id="cFreeData">—</span></div>
+    <div class="row"><span class="k">کش (/cache)</span><span class="v" id="cFreeCache">—</span></div>
+    <div class="row"><span class="k">کارت حافظه (/sdcard)</span><span class="v" id="cFreeSd">—</span></div>
+  </div>
+  <div class="card">
+    <h2>امکانات قابل پاک‌سازی</h2>
+    <div id="cList"><div class="hint">در حال بارگذاری…</div></div>
+  </div>
+  <div class="card">
+    <h2>عملیات</h2>
+    <div class="btns" style="flex-direction:column">
+      <button class="p" id="cBtnQuick" onclick="cleanRun('quick')">🧹 پاکسازی سریع</button>
+      <button id="cBtnDeep" onclick="cleanRun('deep')">پاکسازی عمیق (با کاشهٔ اجرا برنامه‌ها)</button>
+      <button onclick="ramClean()">🧠 پاکسازی حافظهٔ RAM</button>
+    </div>
+    <div class="hint" style="margin-top:9px">
+      «عمیق» کاشهٔ ART را هم پاک می‌کند؛ اولین باز کردن برنامه‌ها کمی کندتر خواهد بود
+      ولی فضای بیشتری آزاد می‌شود. «پاکسازی RAM» فقط صفحهٔ‌های قابل بازیافت سیستم را رها می‌کند
+      (کاربرگ‌های مرورگر و برنامه‌ها حفظ می‌شوند).
+    </div>
+  </div>
+  <div class="ok-box" id="cResult" style="display:none"></div>
+</div>
+
+<!-- ══════════ بست سرعت ══════════ -->
+<div class="page" id="p6">
+  <div class="info-box">
+    حالت سرعت پروفایل «عملکرد» + زمان‌بند I/O + تنظیم حافظه + خاموش کردن انیمیشن‌ها را
+    با یک ضربه اعمال می‌کند. <b>حفاظت حرارتی هرگز دست‌نخورده می‌ماند.</b>
+  </div>
+  <div class="card">
+    <h2>وضعیت فعلی</h2>
+    <div class="row"><span class="k">حالت سرعت</span><span class="v" id="bActive">—</span></div>
+    <div class="row"><span class="k">پروفایل</span><span class="v" id="bProf">—</span></div>
+    <div class="row"><span class="k">گاورنر CPU</span><span class="v" id="bGov">—</span></div>
+    <div class="row"><span class="k">زمان‌بند I/O</span><span class="v" id="bIo">—</span></div>
+    <div class="row"><span class="k">انیمیشن‌ها</span><span class="v" id="bAnim">—</span></div>
+    <div class="row"><span class="k">swappiness</span><span class="v" id="bSwap">—</span></div>
+    <div class="row"><span class="k">رم مجازی MIUI</span><span class="v" id="bMem">—</span></div>
+  </div>
+  <div class="card">
+    <h2>بست یک‌ضربه</h2>
+    <div class="btns" style="flex-direction:column">
+      <button class="p" id="bBtnOn" onclick="boostSet('speed_on')">⚡ فعال‌سازی حالت سرعت</button>
+      <button id="bBtnOff" onclick="boostSet('speed_off')">خاموش کردن و بازگشت به حالت عادی</button>
+    </div>
+    <div class="hint" style="margin-top:9px">
+      «بازگشت» همهٔ مقادیر (I/O، حافظه، انیمیشن‌ها، رم مجازی) را به مقدار قبل برمی‌گرداند
+      و پروفایل قبلی شما دوباره فعال می‌شود.
+    </div>
+  </div>
+  <div class="card">
+    <h2>تنظیم جداگانه</h2>
+    <div class="row"><span class="k">انیمیشن‌های سیستم</span>
+      <span class="btns" style="flex:1;max-width:150px">
+        <button onclick="boostSet('anim_off')" style="min-width:0">خاموش</button>
+        <button onclick="boostSet('anim_on')" style="min-width:0">روشن</button>
+      </span></div>
+    <div class="row"><span class="k">بهینه‌سازی حافظه (VM)</span>
+      <span class="btns" style="flex:1;max-width:150px">
+        <button onclick="boostSet('vm_on')" style="min-width:0">فعال</button>
+        <button onclick="boostSet('vm_off')" style="min-width:0">غیرفعال</button>
+      </span></div>
+    <div class="row"><span class="k">رم مجازی MIUI</span>
+      <span class="btns" style="flex:1;max-width:150px">
+        <button onclick="boostSet('memext_off')" style="min-width:0">خاموش</button>
+        <button onclick="boostSet('memext_on')" style="min-width:0">روشن</button>
+      </span></div>
+    <div class="hint" style="margin-top:9px">
+      رم مجازی MIUI بخشی از حافظهٔ داخلی را به‌عنوان swap در UFS استفاده می‌کند؛
+      خاموش‌کردن آن معمولاً لگ‌های لحظه‌ای را کم می‌کند (به ازای حافظهٔ موجود کمتر).
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ لاگ ══════════ -->
+<div class="page" id="p7">
   <div class="card">
     <h2>لاگ اخیر</h2>
     <pre id="logOut">در حال بارگذاری…</pre>
@@ -387,7 +472,9 @@ function tab(i){
   if(i===2) loadTune();
   if(i===3) loadKernel();
   if(i===4) loadBattery();
-  if(i===5) loadLog();
+  if(i===5) loadClean();
+  if(i===6) loadBoost();
+  if(i===7) loadLog();
 }
 
 // ───────── status
@@ -524,6 +611,78 @@ async function loadBattery(){
   } else w.style.display='none';
 }
 
+// ───────── cleaner
+const fmtKB=(kb)=>{
+  if(kb==null) return '—';
+  if(kb<1024) return kb+' KB';
+  if(kb<1024*1024) return (kb/1024).toFixed(1)+' MB';
+  return (kb/1024/1024).toFixed(2)+' GB';
+};
+function renderCleanTargets(el,list,mode){
+  if(!list||!list.length){ el.innerHTML='<div class="hint">هدفی یافت نشد</div>'; return; }
+  const total=list.reduce((a,t)=>a+(t.kb||0),0);
+  el.innerHTML = list.map(t=>
+    `<div class="row"><span class="k">${t.label}<br><small style="color:#3d4656;direction:ltr;display:block">${t.path}</small></span>
+     <span class="v">${fmtKB(t.kb)} <small style="color:#5c6675">(${t.count||0} مورد)</small></span></div>`
+  ).join('') +
+  `<div class="row" style="border:0;margin-top:4px"><span class="k" style="color:#4f8cff">مجموع (${mode==='deep'?'عمیق':'سریع'})</span>
+   <span class="v" style="color:#4f8cff">${fmtKB(total)}</span></div>`;
+}
+async function loadClean(){
+  const d=await api('clean'); if(!d) return;
+  q('#cFreeData').textContent=fmtKB(d.free_data);
+  q('#cFreeCache').textContent=fmtKB(d.free_cache);
+  q('#cFreeSd').textContent=fmtKB(d.free_sdcard);
+  const el=q('#cList');
+  const quick=d.quick||[], deep=d.deep||[];
+  renderCleanTargets(el,quick.concat(deep),'همه');
+  deep.forEach(t=>{ /* deep targets shown with quick list above */ });
+}
+async function cleanRun(mode){
+  if(mode==='deep' && !confirm('پاکسازی عمیق، کاشهٔ اجرای برنامه‌ها (ART) را هم پاک می‌کند.\nاولین باز کردن برنامه‌ها کمی کندتر می‌شود.\nادامه می‌دهیم؟')) return;
+  const btn=q(mode==='deep'?'#cBtnDeep':'#cBtnQuick');
+  if(btn){ btn.disabled=true; btn.textContent='در حال پاک‌سازی…'; }
+  const r=await api('cleanrun','&value='+mode);
+  if(btn){ btn.disabled=false; btn.textContent=mode==='deep'?'پاکسازی عمیق (با کاشهٔ اجرا برنامه‌ها)':'🧹 پاکسازی سریع'; }
+  if(r&&r.ok){
+    const box=q('#cResult');
+    box.style.display='block';
+    box.innerHTML=`✅ ${fmtKB(r.freed_kb||0)} آزاد شد`+
+      (r.delta_kb>0?` — فضای خالی /data: ${fmtKB(r.free_data)}`:'');
+    toast('پاک‌سازی انجام شد: '+fmtKB(r.freed_kb||0),'ok');
+    loadClean();
+  } else toast('پاک‌سازی ناموفق','err');
+}
+async function ramClean(){
+  const r=await api('ramclean');
+  toast(r&&r.ok?'حافظهٔ قابل بازیافت رها شد':'پشتیبانی نمی‌شود', r&&r.ok?'ok':'err');
+}
+
+// ───────── booster
+const MEMEXT_FA={on:'روشن',off:'خاموش',unknown:'نیافته شد'};
+async function loadBoost(){
+  const d=await api('boost'); if(!d) return;
+  q('#bActive').textContent=d.active?'⚡ فعال':'خاموش';
+  q('#bActive').style.color=d.active?'#00d68f':'#8b97a8';
+  q('#bProf').textContent=(d.profile||'—').toUpperCase();
+  q('#bGov').textContent=d.governor||'—';
+  q('#bIo').textContent=d.io||'—';
+  q('#bAnim').textContent=d.animations==='0.0'?'خاموش':(d.animations||'—');
+  q('#bSwap').textContent=d.swappiness!=null?d.swappiness:'—';
+  q('#bMem').textContent=MEMEXT_FA[d.virtual_ram]||d.virtual_ram;
+  q('#bBtnOn').textContent=d.active?'⚡ حالت سرعت فعال است':'⚡ فعال‌سازی حالت سرعت';
+  q('#bBtnOn').className=d.active?'':'p';
+}
+async function boostSet(v){
+  const r=await api('boostset','&value='+v);
+  const names={speed_on:'حالت سرعت فعال شد',speed_off:'به حالت عادی برگشتید',
+               anim_on:'انیمیشن‌ها روشن شد',anim_off:'انیمیشن‌ها خاموش شد',
+               vm_on:'بهینه‌سازی حافظه فعال شد',vm_off:'بهینه‌سازی حافظه غیرفعال شد',
+               memext_on:'رم مجازی روشن شد',memext_off:'رم مجازی خاموش شد'};
+  if(r&&r.ok){ toast(names[v]||'انجام شد','ok'); loadBoost(); loadStatus(); }
+  else toast((r&&r.error)||'انجام نشد','err');
+}
+
 // ───────── log
 async function loadLog(){
   const d=await api('log');
@@ -580,7 +739,7 @@ window.addEventListener('appinstalled',()=>{
 // Deep links from the manifest shortcuts: /?tab=4 opens the battery tab.
 (function(){
   const t=parseInt(new URLSearchParams(location.search).get('tab'),10);
-  if(!isNaN(t) && t>=0 && t<=5) tab(t);
+  if(!isNaN(t) && t>=0 && t<=7) tab(t);
 })();
 
 // ───────── boot

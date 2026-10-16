@@ -19,6 +19,12 @@
 #   reset         restore every original value and re-apply baseline
 #   monitor [min] start recording a gaming session (default 20 min)
 #   sessions      list saved sessions
+#   clean [scan|quick|deep]  scan or run the cleaner (deep = + ART cache)
+#   ramclean      clear logcat buffers and drop clean page caches
+#   boost [action] speed booster status/actions:
+#                   (none)=status, speed_on, speed_off,
+#                   anim_on, anim_off, vm_on, vm_off,
+#                   memext_on, memext_off
 #   save NAME     save the current session under a name
 #   compare A B   compare two saved sessions side by side
 #   report        summarise the recorded session
@@ -342,8 +348,62 @@ case "$CMD" in
         fi
         ;;
 
+    clean)
+        _clean_mode="${2:-scan}"
+        case "$_clean_mode" in
+            scan)
+                printf '%-28s %10s\n' 'TARGET' 'SIZE'
+                # shellcheck disable=SC2086
+                for _clean_e in $CLEANER_QUICK_TARGETS $CLEANER_DEEP_TARGETS; do
+                    [ -n "$_clean_e" ] || continue
+                    printf '%-28s %10s KiB\n' "${_clean_e%%|*}" \
+                        "$(cleaner_dir_kb "${_clean_e%%|*}")"
+                done
+                printf '\nfree /data: %s KiB\n' "$(cleaner_storage_free_kb /data)"
+                ;;
+            quick|deep)
+                _clean_kb=$(cleaner_run "$_clean_mode")
+                printf 'Cleaned (%s): %s KiB freed\n' "$_clean_mode" "$_clean_kb"
+                ;;
+            *)
+                printf 'usage: hpc.sh clean [scan|quick|deep]\n'
+                ;;
+        esac
+        ;;
+
+    ramclean)
+        cleaner_ram >/dev/null 2>&1
+        printf 'RAM housekeeping done (logcat cleared, clean caches dropped)\n'
+        ;;
+
+    boost)
+        _boost_act="${2:-status}"
+        case "$_boost_act" in
+            status|"")
+                printf 'active:     %s\n' "$(booster_active && echo yes || echo no)"
+                printf 'profile:    %s\n' "$(current_profile)"
+                printf 'governor:   %s\n' "$(for _bp in $(detect_policies); do read_node "$_bp/scaling_governor" && break; done)"
+                printf 'io:         %s\n' "$(km_io_current)"
+                printf 'animations: %s\n' "$(booster_anim_value)"
+                printf 'swappiness: %s\n' "$(read_node /proc/sys/vm/swappiness)"
+                printf 'virt ram:   %s\n' "$(booster_memext_state)"
+                ;;
+            speed_on)   booster_speed_on;  printf 'Speed mode ON\n' ;;
+            speed_off)  booster_speed_off; printf 'Speed mode OFF (restored)\n' ;;
+            anim_on)    booster_anim_on && printf 'Animations on\n' ;;
+            anim_off)   booster_anim_off && printf 'Animations off\n' ;;
+            vm_on)      booster_vm_on && printf 'VM speed tuning on\n' ;;
+            vm_off)     booster_vm_off; printf 'VM speed tuning off (restored)\n' ;;
+            memext_on)  booster_memext_on && printf 'MIUI virtual RAM on\n' || printf 'not found on this ROM\n' ;;
+            memext_off) booster_memext_off && printf 'MIUI virtual RAM off\n' || printf 'not found on this ROM\n' ;;
+            *)
+                printf 'usage: hpc.sh boost [status|speed_on|speed_off|anim_on|anim_off|vm_on|vm_off|memext_on|memext_off]\n'
+                ;;
+        esac
+        ;;
+
     help|-h|--help)
-        sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
         ;;
 
     *)

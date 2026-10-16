@@ -56,6 +56,22 @@ if [ -f "$GFXBAK" ] && command -v resetprop >/dev/null 2>&1; then
     _log "graphics properties restored"
 fi
 
+# --- restore booster settings (animations, MIUI virtual RAM) -----------
+# These were changed via the `settings` command, not file nodes, so the
+# backup-file restore above does not cover them.
+BOOSTERSET="$HPC_DATA/state/booster_settings"
+if [ -f "$BOOSTERSET" ] && command -v settings >/dev/null 2>&1; then
+    while IFS="$(printf '\t')" read -r tbl name val; do
+        [ -n "$tbl" ] && [ -n "$name" ] || continue
+        if [ "$val" = "__null__" ]; then
+            settings delete "$tbl" "$name" 2>/dev/null
+        else
+            settings put "$tbl" "$name" "$val" 2>/dev/null
+        fi
+    done <"$BOOSTERSET"
+    _log "booster settings restored"
+fi
+
 # --- stop the service if it is still running --------------------------
 pkill -f "hamedis_performance_core/service.sh" 2>/dev/null
 pkill -f "httpd.*127.0.0.1:1111" 2>/dev/null

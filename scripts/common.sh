@@ -122,7 +122,8 @@ hpc_load_config() {
 
 hpc_load_libs() {
     for _lib in logger safety detector profile_manager thermal_manager \
-                ram_manager battery_manager graphics_manager kernel_manager webui game_detector monitor; do
+                ram_manager battery_manager graphics_manager kernel_manager webui game_detector monitor \
+                cleaner booster; do
         # shellcheck source=/dev/null
         [ -f "$HPC_SCRIPTS/$_lib.sh" ] && . "$HPC_SCRIPTS/$_lib.sh"
     done
