@@ -33,11 +33,43 @@ header .dot.warn{background:#ffb84d}header .dot.hot{background:#ff5f56}
 header small{font-size:10.5px;color:#5c6symbol}
 
 nav{display:flex;background:#10151f;border-bottom:1px solid #1e2633;flex-shrink:0;
- overflow-x:auto}
-nav button{flex:1;min-width:72px;padding:11px 6px;border:0;background:none;color:#6b7688;
+ overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;min-width:74px;padding:11px 10px;border:0;background:none;color:#6b7688;
  font-size:12px;font-family:inherit;border-bottom:2px solid transparent;white-space:nowrap}
 nav button.on{color:#4f8cff;border-bottom-color:#4f8cff}
 nav button{transition:color .2s,border-bottom-color .2s}
+
+/* ── kernel platform (v1.10) ─────────────────────────────── */
+.subnav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:11px}
+.subnav button{flex:0 0 auto;padding:7px 12px;border-radius:9px;border:1px solid #1e2633;
+ background:#0d131d;color:#6b7688;font-size:11.5px;font-family:inherit}
+.subnav button.on{background:#4f8cff18;border-color:#4f8cff66;color:#4f8cff}
+.kpanel{display:none}.kpanel.on{display:block}
+.badge{display:inline-block;padding:2px 8px;border-radius:7px;font-size:10px;font-weight:600}
+.badge.rw{background:#00d68f1a;color:#00d68f}
+.badge.ro{background:#ffb84d1a;color:#ffb84d}
+.badge.no{background:#2a3242;color:#8b97a8}
+.badge.risk-low{background:#00d68f14;color:#00d68f}
+.badge.risk-med{background:#ffb84d1a;color:#ffb84d}
+.badge.risk-high{background:#ff5f561a;color:#ff5f56}
+.badge.risk-protected{background:#ff5f5622;color:#ff8a80}
+.spark{width:100%;height:44px;background:#0d131d;border:1px solid #1a2130;border-radius:8px;display:block}
+.klog{background:#0a0f17;border:1px solid #1a2130;border-radius:9px;padding:9px;
+ font-family:ui-monospace,monospace;font-size:10.5px;line-height:1.55;color:#9fb4d0;
+ max-height:280px;overflow-y:auto;direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-word}
+.klog .err{color:#ff8a80}
+table.kt{width:100%;border-collapse:collapse;font-size:11.5px}
+table.kt td{padding:6px 4px;border-bottom:1px solid #161d29}
+table.kt td:last-child{text-align:left;direction:ltr;color:#9fb4d0;font-family:ui-monospace,monospace;font-size:10.5px}
+.finding{border:1px solid #1e2633;border-radius:10px;padding:11px;margin-bottom:9px;background:#0d131d}
+.finding.high{border-color:#ff5f5655}.finding.med{border-color:#ffb84d44}.finding.info{border-color:#4f8cff44}
+.finding .ft{font-size:12.5px;font-weight:600;margin-bottom:5px}
+.finding .fx{font-size:11.5px;color:#8b97a8;line-height:1.6}
+.finding .fev{font-size:10.5px;color:#5c6675;margin-top:6px}
+.sugg{display:flex;align-items:center;gap:8px;margin-top:8px;padding:8px;border-radius:8px;background:#111722}
+.sugg .st{flex:1;font-size:11px;color:#9fb4d0}
+.sugg button{flex:0 0 auto}
 
 main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 24px}
 .page{display:none}.page.on{display:block}
@@ -156,9 +188,12 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   <button onclick="tab(2)">تنظیم دستی</button>
   <button onclick="tab(3)">کرنل</button>
   <button onclick="tab(4)">باتری</button>
-  <button onclick="tab(5)">پاکسازی</button>
-  <button onclick="tab(6)">بست سرعت</button>
-  <button onclick="tab(7)">لاگ</button>
+  <button onclick="tab(5)">حافظه/حرارت</button>
+  <button onclick="tab(6)">پاکسازی</button>
+  <button onclick="tab(7)">بست سرعت</button>
+  <button onclick="tab(8)">تشخیص</button>
+  <button onclick="tab(9)">دستیار</button>
+  <button onclick="tab(10)">لاگ</button>
 </nav>
 
 <main>
@@ -216,6 +251,37 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
     پروفایل فعال روی همهٔ هسته‌ها، GPU، زمان‌بند و آستانه‌های حرارتی اعمال می‌شود.
   </div>
   <div class="card"><h2>انتخاب پروفایل</h2><div class="prof" id="profList"></div></div>
+  <div class="card">
+    <h2>مدیریت پروفایل</h2>
+    <div class="hint" style="margin-bottom:8px">مقایسه، خروجی‌گیری، کپی و درای‌پروفایل. حذف فقط روی پروفایل‌های کاربری مجاز است — پروفایل‌های داخلی دست‌نخورده می‌مانند.</div>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+      <select id="pmA" style="flex:1;min-width:110px"></select>
+      <span style="color:#8a93a6">مقابل</span>
+      <select id="pmB" style="flex:1;min-width:110px"></select>
+      <button onclick="pmCompare()">مقایسه</button>
+    </div>
+    <div id="pmCmp"></div>
+    <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0 8px">
+      <select id="pmExp" style="flex:1;min-width:110px"></select>
+      <button onclick="pmExport()">خروجی</button>
+      <button onclick="pmDup()">کپی</button>
+      <button onclick="pmDelete()" style="color:#ff7a7a">حذف</button>
+    </div>
+    <div id="pmOut"></div>
+    <div style="border-top:1px solid #232a3a;margin-top:12px;padding-top:10px">
+      <b style="font-size:12px;color:#8a93a6">دریافت پروفایل (متن خام)</b>
+      <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+        <input id="pmInName" placeholder="نام جدید (a-z 0-9)" maxlength="24" style="flex:1;min-width:110px">
+      </div>
+      <textarea id="pmInTxt" rows="5" placeholder='مثلاً:
+PROFILE_NAME="MY PROFILE"
+CPU_MAX_PERCENT=75
+CPU_MIN_PERCENT=10
+POLL_INTERVAL=30'
+        style="width:100%;box-sizing:border-box;margin-top:6px;background:#0d1119;border:1px solid #232a3a;border-radius:8px;color:#c8d2e8;font-family:monospace;font-size:11px;padding:8px"></textarea>
+      <div style="margin-top:6px"><button onclick="pmImport()">وارد کردن</button></div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ تنظیم دستی ══════════ -->
@@ -295,20 +361,88 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 
 <!-- ══════════ کرنل ══════════ -->
 <div class="page" id="p3">
-  <div class="card">
-    <h2>زمان‌بند I/O</h2>
-    <div class="seg" id="ioSeg"></div>
-    <div class="hint" style="margin-top:9px">فقط زمان‌بندهایی که کرنل واقعاً ارائه می‌دهد نمایش داده می‌شوند.</div>
+  <div class="subnav" id="kmSubNav">
+    <button class="on" onclick="kmSub(0)">CPU</button>
+    <button onclick="kmSub(1)">GPU</button>
+    <button onclick="kmSub(2)">جدول‌بند</button>
+    <button onclick="kmSub(3)">تنظیمات</button>
+    <button onclick="kmSub(4)">ماژول‌ها</button>
+    <button onclick="kmSub(5)">لاگ کرنل</button>
   </div>
-  <div class="card">
-    <h2>کنترل ازدحام TCP</h2>
-    <div class="seg" id="tcpSeg"></div>
+
+  <!-- CPU -->
+  <div class="kpanel on" id="kmp0">
+    <div class="card">
+      <h2>CPU زنده</h2>
+      <div class="grid">
+        <div class="stat"><div class="lbl">بار CPU</div><div class="val" id="kmCpuUtil">—</div></div>
+        <div class="stat"><div class="lbl">حالت هسته‌ها (روشن/کل)</div><div class="val" id="kmCpuOn">—</div></div>
+      </div>
+      <canvas class="spark" id="cpuSpark"></canvas>
+      <div class="hint" style="margin-top:8px">میانگین ۱ دقیقه: <span id="kmLoad1">—</span></div>
+    </div>
+    <div class="card">
+      <h2>کلاسترها</h2>
+      <div id="kmCpuPols"><div class="hint">در حال بارگذاری…</div></div>
+      <div class="hint" style="margin-top:8px">گاورنر و محدودهٔ فرکانس را می‌توان از تب «تنظیم دستی» یا خط فرمان تغییر داد — همهٔ تغییرات ثبت و قابل بازگشت هستند.</div>
+    </div>
   </div>
-  <div class="card">
-    <h2>اطلاعات</h2>
-    <div class="row"><span class="k">read-ahead</span><span class="v" id="kRa">—</span></div>
-    <div class="row"><span class="k">zRAM</span><span class="v" id="kZram">—</span></div>
-    <div class="row"><span class="k">SELinux</span><span class="v" id="kSel">—</span></div>
+
+  <!-- GPU -->
+  <div class="kpanel" id="kmp1">
+    <div class="card">
+      <h2>GPU</h2>
+      <div id="kmGpuBox"><div class="hint">در حال بارگذاری…</div></div>
+    </div>
+  </div>
+
+  <!-- Scheduler -->
+  <div class="kpanel" id="kmp2">
+    <div class="card">
+      <h2>جدول‌بند (Scheduler)</h2>
+      <div id="kmSchedBox"><div class="hint">در حال بارگذاری…</div></div>
+      <div class="hint" style="margin-top:8px">پارامترهای CFS روی کرنل‌های مختلف معنای متفاوتی دارند؛ قبل از تغییر از تب «تشخیص» بنچمارک A/B بگیرید.</div>
+    </div>
+  </div>
+
+  <!-- Settings (legacy IO/TCP) -->
+  <div class="kpanel" id="kmp3">
+    <div class="card">
+      <h2>زمان‌بند I/O</h2>
+      <div class="seg" id="ioSeg"></div>
+      <div class="hint" style="margin-top:9px">فقط زمان‌بندهایی که کرنل واقعاً ارائه می‌دهد نمایش داده می‌شوند.</div>
+    </div>
+    <div class="card">
+      <h2>کنترل ازدحام TCP</h2>
+      <div class="seg" id="tcpSeg"></div>
+    </div>
+    <div class="card">
+      <h2>اطلاعات</h2>
+      <div class="row"><span class="k">read-ahead</span><span class="v" id="kRa">—</span></div>
+      <div class="row"><span class="k">zRAM</span><span class="v" id="kZram">—</span></div>
+      <div class="row"><span class="k">SELinux</span><span class="v" id="kSel">—</span></div>
+    </div>
+  </div>
+
+  <!-- Modules -->
+  <div class="kpanel" id="kmp4">
+    <div class="card">
+      <h2>ماژول‌های کرنل</h2>
+      <div id="kmModsBox"><div class="hint">در حال بارگذاری…</div></div>
+    </div>
+  </div>
+
+  <!-- Kernel log -->
+  <div class="kpanel" id="kmp5">
+    <div class="card">
+      <h2>لاگ کرنل (dmesg)</h2>
+      <div class="row" style="margin-bottom:8px">
+        <span class="k">فیلتر</span>
+        <span class="v"><input id="klogPat" placeholder="مثلاً thermal" style="width:130px;background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px 9px;font-size:11.5px" onkeydown="if(event.key==='Enter')loadKmKlog()">
+        <button onclick="loadKmKlog()" style="padding:6px 12px;font-size:11px">جستجو</button></span>
+      </div>
+      <div class="klog" id="kmKlog">در حال بارگذاری…</div>
+    </div>
   </div>
 </div>
 
@@ -324,8 +458,29 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   </div>
 </div>
 
-<!-- ══════════ پاکسازی ══════════ -->
+<!-- ══════════ حافظه و حرارت ══════════ -->
 <div class="page" id="p5">
+  <div class="card">
+    <h2>حافظهٔ رم</h2>
+    <div class="grid">
+      <div class="stat"><div class="lbl">در دسترس</div><div class="val" id="mtAvail">—</div></div>
+      <div class="stat"><div class="lbl">کل</div><div class="val" id="mtTotal">—</div></div>
+      <div class="stat"><div class="lbl">کش + بافر</div><div class="val" id="mtCache">—</div></div>
+      <div class="stat"><div class="lbl">Swap</div><div class="val" id="mtSwap">—</div></div>
+    </div>
+    <canvas class="spark" id="memSpark"></canvas>
+    <div class="row" style="margin-top:9px"><span class="k">zRAM (فشرده)</span><span class="v" id="mtZram">—</div>
+    <div class="row"><span class="k">فشار حافظه (PSI)</span><span class="v" id="mtPsi">—</span></div>
+  </div>
+  <div class="card">
+    <h2>سنسورهای حرارتی</h2>
+    <div id="mtZones"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="hint" style="margin-top:8px">حالت محدودسازی کرنل: <b id="mtThrottle">—</b> — HPC هرگز حفاظت حرارتی را غیرفعال نمی‌کند؛ این بخش فقط مشاهده است.</div>
+  </div>
+</div>
+
+<!-- ══════════ پاکسازی ══════════ -->
+<div class="page" id="p6">
   <div class="info-box">
     فقط کاشه‌ها و فایل‌های زائدی پاک می‌شود که سیستم خودش دوباره می‌سازد.
     <b>عکس، ویدیو، سند و دادهٔ برنامه‌های شما دست‌نخورده می‌ماند.</b>
@@ -357,7 +512,7 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 </div>
 
 <!-- ══════════ بست سرعت ══════════ -->
-<div class="page" id="p6">
+<div class="page" id="p7">
   <div class="info-box">
     حالت سرعت پروفایل «عملکرد» + زمان‌بند I/O + تنظیم حافظه + خاموش کردن انیمیشن‌ها را
     با یک ضربه اعمال می‌کند. <b>حفاظت حرارتی هرگز دست‌نخورده می‌ماند.</b>
@@ -407,8 +562,80 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   </div>
 </div>
 
+<!-- ══════════ تشخیص و ابزار ══════════ -->
+<div class="page" id="p8">
+  <div class="card">
+    <h2>سلامت سیستم</h2>
+    <div class="row"><span class="k">امتیاز (۰ تا ۱۰۰)</span><span class="v" id="dgScore">—</span></div>
+    <div id="dgComp"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="hint" style="margin-top:8px">امتیاز یک تخمین از «مشکل‌های اخیر» است، نه معیاری از فرسودگی سخت‌افزار. جزئیات زیر را می‌توانید بررسی کنید.</div>
+  </div>
+  <div class="card">
+    <h2>رویدادها (Timeline)</h2>
+    <div id="dgEvents"><div class="hint">در حال بارگذاری…</div></div>
+  </div>
+  <div class="card">
+    <h2>تاریخچهٔ تغییرات + بازگشت</h2>
+    <div id="dgHistory"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="btns" style="margin-top:9px">
+      <button onclick="kmRollback(1)">بازگشت آخرین</button>
+      <button onclick="kmRollback(5)">۵ آخر</button>
+      <button onclick="kmRollback('all')">بازگشت همه</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>بنچمارک (ترکیبی)</h2>
+    <div class="hint" style="margin-bottom:8px">اعداد ترکیبی (synthetic) — فقط برای مقایسهٔ دو تنظیم روی همین دستگاه، نه ادعای مطلق.</div>
+    <div class="btns">
+      <button onclick="kmBench('cpu')">CPU</button>
+      <button onclick="kmBench('cpux')">CPU همه‌هسته</button>
+      <button onclick="kmBench('io')">I/O</button>
+      <button onclick="kmBench('mem')">حافظه</button>
+    </div>
+    <div id="dgBench" style="margin-top:9px"></div>
+    <h2 style="margin-top:14px">مقایسهٔ A/B دو پروفایل</h2>
+    <div class="row"><span class="k">بنچ</span>
+      <span class="v"><select id="abBench" style="background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px;font-size:11.5px"><option>cpu</option><option>io</option><option>mem</option></select></span></div>
+    <div class="row"><span class="k">پروفایل A</span><span class="v"><select id="abA" style="background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px;font-size:11.5px"></select></span></div>
+    <div class="row"><span class="k">پروفایل B</span><span class="v"><select id="abB" style="background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px;font-size:11.5px"></select></span></div>
+    <div class="btns" style="margin-top:8px"><button class="w" onclick="kmBenchAB()">اجرای A/B (~۳۰ ثانیه)</button></div>
+    <div id="dgAb" style="margin-top:8px"></div>
+  </div>
+  <div class="card">
+    <h2>سازگاری دستگاه و ابزار توسعه</h2>
+    <div id="dgCaps"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="btns" style="margin-top:9px">
+      <button onclick="kmReport()">ساخت گزارش تشخیصی (Redacted)</button>
+    </div>
+    <div id="dgReport" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- ══════════ دستیار ══════════ -->
+<div class="page" id="p9">
+  <div class="card">
+    <h2>تحلیل وضعیت فعلی</h2>
+    <div class="hint" style="margin-bottom:9px">یافته‌ها از دادهٔ واقعی دستگاه ساخته می‌شوند. «مشاهدهٔ‌شده» = اندازه‌گیری، «استدلالی» = قاعده‌ای روی مشاهدات. پیشنهادی که «نامعتبر» است روی این دستگاه اعمال نمی‌شود.</div>
+    <div id="advFindings"><div class="hint">در حال تحلیل…</div></div>
+    <div class="btns" style="margin-top:9px"><button onclick="loadAdvise()">تحلیل دوباره</button></div>
+  </div>
+  <div class="card">
+    <h2>توضیح یک پارامتر</h2>
+    <div class="row" style="margin-bottom:8px">
+      <span class="k">کنترل</span>
+      <span class="v"><input id="advId" placeholder="مثلاً cpu1.governor یا net.tcp_cc" style="width:170px;background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px 9px;font-size:11.5px;direction:ltr;text-align:left" onkeydown="if(event.key==='Enter')advExplain()">
+        <button onclick="advExplain()">توضیح</button></span>
+    </div>
+    <div id="advExplain"></div>
+  </div>
+  <div class="card">
+    <h2>فکت‌های اندازه‌گیری‌شده</h2>
+    <div id="advFacts" class="hint">—</div>
+  </div>
+</div>
+
 <!-- ══════════ لاگ ══════════ -->
-<div class="page" id="p7">
+<div class="page" id="p10">
   <div class="card">
     <h2>لاگ اخیر</h2>
     <pre id="logOut">در حال بارگذاری…</pre>
@@ -464,17 +691,115 @@ function toast(m,c=''){
   setTimeout(()=>t.className='',2200);
 }
 
+let kmSubIdx=0;
 function tab(i){
   cur=i;
   document.querySelectorAll('nav button').forEach((b,j)=>b.classList.toggle('on',i===j));
   document.querySelectorAll('.page').forEach((p,j)=>p.classList.toggle('on',i===j));
   if(i===1) loadProfiles();
   if(i===2) loadTune();
-  if(i===3) loadKernel();
+  if(i===3){ loadKernel(); loadKmCpu(); }
   if(i===4) loadBattery();
-  if(i===5) loadClean();
-  if(i===6) loadBoost();
-  if(i===7) loadLog();
+  if(i===5) loadMemTherm();
+  if(i===6) loadClean();
+  if(i===7) loadBoost();
+  if(i===8) loadDiag();
+  if(i===9) loadAdvise();
+  if(i===10) loadLog();
+}
+
+// ───────── kernel platform (v1.10)
+const fmtKB2=(kb)=>{ if(kb==null) return '—'; if(kb<1024) return kb+' KB';
+  if(kb<1024*1024) return (kb/1024).toFixed(1)+' MB'; return (kb/1024/1024).toFixed(2)+' GB'; };
+const fmtMs=(ms)=>new Date(ms).toLocaleTimeString('fa-IR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const cpuHist=[], memHist=[];
+function spark(el,arr,color){
+  if(!el) return; const c=el.getContext('2d'); const W=el.width=el.clientWidth*2, H=el.height=88;
+  c.clearRect(0,0,W,H); if(arr.length<2) return;
+  const mn=Math.min(...arr), mx=Math.max(...arr), sp=(mx-mn)||1;
+  c.beginPath();
+  arr.forEach((v,i)=>{ const x=i/(arr.length-1)*W, y=H-6-(v-mn)/sp*(H-12);
+    i?c.lineTo(x,y):c.moveTo(x,y); });
+  c.strokeStyle=color; c.lineWidth=2.5; c.stroke();
+  c.lineTo(W,H); c.lineTo(0,H); c.closePath();
+  c.fillStyle=color+'22'; c.fill();
+}
+function kmSub(i){
+  kmSubIdx=i;
+  q('#kmSubNav').querySelectorAll('button').forEach((b,j)=>b.classList.toggle('on',i===j));
+  q('#p3').querySelectorAll('.kpanel').forEach((p,j)=>p.classList.toggle('on',i===j));
+  [loadKmCpu,loadKmGpu,loadKmSched,loadKernel,loadKmMods,loadKmKlog][i]();
+}
+async function loadKmCpu(){
+  const d=await api('km','&value=cpu'); if(!d) return;
+  q('#kmCpuUtil').textContent=d.util_pct!=null?d.util_pct+'%':'—';
+  q('#kmCpuOn').textContent=d.online||'—';
+  if(d.loadavg) q('#kmLoad1').textContent=d.loadavg.split(' ')[0];
+  if(d.util_pct!=null){ cpuHist.push(d.util_pct); if(cpuHist.length>60) cpuHist.shift(); spark(q('#cpuSpark'),cpuHist,'#4f8cff'); }
+  q('#kmCpuPols').innerHTML=(d.policies||[]).map(p=>
+    `<div class="row"><span class="k">کلاستر ${p.cpus}</span>
+     <span class="v">${(p.cur_khz!=null?(p.cur_khz/1000).toFixed(1)+' GHz':'—')}
+     <small style="color:#5c6675"> / gov: ${p.governor||'—'}</small></span></div>`
+  ).join('')||'<div class="hint">هیچ policy یافت نشد</div>';
+}
+async function loadKmGpu(){
+  const d=await api('km','&value=gpu'); if(!d) return;
+  if(!d.present){ q('#kmGpuBox').innerHTML='<div class="hint">روی این دستگاه هیچ رابط sysfs برای GPU یافت نشد — نمایش «غیرفعال» نیست، یعنی کرنل این اطلاعات را ارائه نمی‌دهد.</div>'; return; }
+  q('#kmGpuBox').innerHTML=
+    `<div class="row"><span class="k">نوع</span><span class="v">${d.vendor||'—'}</span></div>`+
+    `<div class="row"><span class="k">اشغال GPU</span><span class="v">${d.busy_pct!=null?d.busy_pct+'%':'—'}</span></div>`+
+    `<div class="row"><span class="k">فرکانس فعلی</span><span class="v">${d.cur_freq_khz!=null?(d.cur_freq_khz/1000).toFixed(1)+' GHz':'—'}</span></div>`+
+    `<div class="row"><span class="k">گاورنر</span><span class="v">${d.governor||'—'}</span></div>`+
+    `<div class="row"><span class="k">لیمیت حرارتی کرنل</span><span class="v">${d.throttling==='absent'?'دیده نمی‌شود':(d.throttling)}</span></div>`;
+}
+async function loadKmSched(){
+  const d=await api('km','&value=sched'); if(!d) return;
+  let h='';
+  if(d.sched_features!=='null') h+=`<div class="row"><span class="k">sched_features</span><span class="v" style="direction:ltr;font-size:10px">${d.sched_features}</span></div>`;
+  if(d.cfs_min_granularity_ns!=null) h+=`<div class="row"><span class="k">cfs_min_granularity</span><span class="v">${d.cfs_min_granularity_ns} ns</span></div>`;
+  if(d.walt_keys!=='absent' && d.walt_keys) h+=`<div class="row"><span class="k">پارامترهای WALT</span><span class="v">${d.walt_keys} کلید (vendor)</span></div>`;
+  h+=`<div class="hint" style="margin-top:8px">اعداد jiffies هر CPU (کل/آلایدر) برای تشخیص بار نامتقارن: <span style="direction:ltr">${(d.cpu_jiffies||[]).join(' ')||'—'}</span></div>`;
+  q('#kmSchedBox').innerHTML=h||'<div class="hint">این کرنل پارامتر قابل‌مشاهده‌ای ارائه نمی‌دهد</div>';
+}
+async function loadKmMods(){
+  const d=await api('km','&value=modules'); if(!d) return;
+  let h=`<div class="row"><span class="k">ماژول‌های بارشده</span><span class="v">${d.count} ماژول</span></div>`;
+  if(d.modules&&d.modules.length){
+    h+=`<div style="max-height:220px;overflow-y:auto;margin-top:8px">`+d.modules.map(m=>
+      `<div class="row"><span class="k" style="direction:ltr;text-align:left;font-family:monospace;font-size:10.5px">${m.name}</span><span class="v">${m.size} B</span></div>`).join('')+`</div>`;
+  } else if(d.note && d.note!==' ') h+=`<div class="hint" style="margin-top:8px">${d.note}</div>`;
+  if(d.magisk_modules!=null) h+=`<div class="row" style="margin-top:8px"><span class="k">ماژول‌های Magisk</span><span class="v">${d.magisk_modules} مورد</span></div>`;
+  q('#kmModsBox').innerHTML=h;
+}
+async function loadKmKlog(){
+  const pat=q('#klogPat')?q('#klogPat').value:'';
+  const d=await api('km','&value=klog&n=150'+(pat?'&pat='+encodeURIComponent(pat):'')); if(!d) return;
+  if(!d.readable){ q('#kmKlog').textContent='dmesg در این دسترسی قابل‌خواندن نیست — تشخیصات کرنل محدود است (سیاست کرنل/SELinux).'; return; }
+  q('#kmKlog').innerHTML=(d.lines||[]).map(l=>
+    /(error|fail|bug|panic|oops|watchdog|thermal)/i.test(l)?`<span class="err">${l}</span>`:l).join('\n')
+    || '(خطی یافت نشد)';
+}
+
+// ───────── memory & thermal
+async function loadMemTherm(){
+  const m=await api('km','&value=mem');
+  if(m){
+    q('#mtAvail').textContent=fmtKB2(m.available_kb);
+    q('#mtTotal').textContent=fmtKB2(m.total_kb);
+    q('#mtCache').textContent=fmtKB2((m.cached_kb||0)+(m.buffers_kb||0));
+    q('#mtSwap').textContent=m.swap_total_kb?fmtKB2(m.swap_total_kb-m.swap_free_kb)+' / '+fmtKB2(m.swap_total_kb):'ندارد';
+    q('#mtZram').textContent=m.zram_used_kb!=null?fmtKB2(m.zram_used_kb)+' (از '+fmtKB2(m.zram_orig_kb)+')':'zram فعال نیست';
+    q('#mtPsi').textContent=m.psi_some&&m.psi_some!=='null'?m.psi_some:'دیده نمی‌شود (PSI)';
+    if(m.available_kb!=null&&m.total_kb){ const pc=Math.round(m.available_kb*100/m.total_kb);
+      memHist.push(pc); if(memHist.length>60) memHist.shift(); spark(q('#memSpark'),memHist,'#00d68f'); }
+  }
+  const t=await api('km','&value=thermal');
+  if(t){
+    q('#mtZones').innerHTML=(t.zones||[]).map(z=>
+      `<div class="row"><span class="k">${z.type}</span><span class="v ${z.temp_c>=45?'hot':''}">${z.temp_c} °C</span></div>`).join('')
+      ||'<div class="hint">سنسوری یافت نشد</div>';
+    q('#mtThrottle').textContent=t.throttling_state||'—';
+  }
 }
 
 // ───────── status
@@ -525,6 +850,7 @@ async function loadProfiles(){
       <div><b>${PROF_FA[p.id]||p.id}</b><span>${p.desc||''}</span></div>
       <span class="tag">${p.cpu_max}% · ${p.warm}°C</span>
     </button>`).join('');
+  pmFillSelects();
 }
 async function setProf(p){
   const r=await api('setprofile','&value='+p);
@@ -533,6 +859,65 @@ async function setProf(p){
       ? `${PROF_FA[r.applied]} اعمال شد (سیاست باتری)` : `${PROF_FA[p]||p} فعال شد`,'ok');
     loadProfiles(); loadStatus();
   } else toast('اعمال نشد','err');
+}
+
+// ───────── profile management (compare / export / dup / delete / import)
+async function pmFillSelects(){
+  const d=await api('kmprof','&value=list'); if(!d) return;
+  const opts=(d.profiles||[]).map(p=>
+    `<option value="${p.name}">${p.name}${p.user?' (کاربر)':''}${p.active?' · فعال':''}</option>`).join('');
+  ['pmA','pmB','pmExp'].forEach(id=>{
+    const el=q('#'+id); if(el){ el.innerHTML=opts; }
+  });
+  if(d.profiles.length>1) q('#pmB').selectedIndex=1;
+}
+function pmAfter(){ pmFillSelects(); loadProfiles(); }
+async function pmCompare(){
+  const a=q('#pmA').value, b=q('#pmB').value;
+  const d=await api('kmprof',`&value=compare:${a},${b}`);
+  const box=q('#pmCmp');
+  if(!d){ box.innerHTML=''; return; }
+  if(!d.ok){ box.innerHTML=`<div class="hint">${d.error||'خطا'}</div>`; return; }
+  const rows=(d.differences||[]).map(x=>
+    `<tr><td style="font-family:monospace;font-size:11px">${x.key}</td><td>${x.a??'—'}</td><td>${x.b??'—'}</td></tr>`).join('');
+  box.innerHTML=`<table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="color:#8a93a6"><th></th><th>${a}</th><th>${b}</th></tr>${rows}</table>
+    ${(d.differences||[]).length?'':'<div class="hint">دو پروفایل کاملاً یکسان‌اند.</div>'}`;
+}
+async function pmExport(){
+  const n=q('#pmExp').value;
+  const d=await api('kmprof',`&value=export:${n}`);
+  const box=q('#pmOut');
+  if(d&&d.ok){
+    box.innerHTML=`<pre style="white-space:pre-wrap;background:#0d1119;border:1px solid #232a3a;border-radius:8px;padding:8px;font-size:11px;max-height:220px;overflow:auto">${(d.content||'').replace(/</g,'&lt;')}</pre>`;
+  } else box.innerHTML=`<div class="hint">${(d&&d.error)||'خطا'}</div>`;
+}
+async function pmDup(){
+  const src=q('#pmExp').value;
+  const dst=prompt('نام پروفایل جدید:', src+'_copy');
+  if(!dst) return;
+  const d=await api('kmprof',`&value=duplicate:${src},${dst}`);
+  toast(d&&d.ok?`کپی شد: ${dst}`:`${(d&&d.error)||'شکست'}`, d&&d.ok?'ok':'err');
+  if(d&&d.ok) pmAfter();
+}
+async function pmDelete(){
+  const n=q('#pmExp').value;
+  if(!confirm(`پروفایل «${n}» حذف شود؟ (فقط پروفایل‌های کاربری حذف می‌شوند)`)) return;
+  const d=await api('kmprof',`&value=delete:${n}`);
+  toast(d&&d.ok?`حذف شد: ${n}`:`${(d&&d.error)||'شکست'}`, d&&d.ok?'ok':'err');
+  if(d&&d.ok) pmAfter();
+}
+async function pmImport(){
+  const n=q('#pmInName').value.trim();
+  const t=q('#pmInTxt').value.trim();
+  if(!n||!t){ toast('نام و محتوا را پر کنید','err'); return; }
+  let b64;
+  try{ b64=btoa(unescape(encodeURIComponent(t))); }catch(e){ toast('خطای تبدیل محتوا','err'); return; }
+  const d=await api('kmprof',`&value=import&name=${encodeURIComponent(n)}&b64=${b64}`);
+  if(d&&d.ok){
+    toast(`وارد شد: ${n} (فعال نیست — از لیست بالا فعال کنید)`,'ok');
+    q('#pmInTxt').value=''; pmAfter();
+  } else toast((d&&d.error)||'دریافت نشد','err');
 }
 
 // ───────── manual tuning
@@ -609,6 +994,109 @@ async function loadBattery(){
     w.style.display='block';
     w.innerHTML='⚠ دمای باتری '+s.battery_temp+'°C — از شارژ جدا کن و بگذار خنک شود.';
   } else w.style.display='none';
+}
+
+// ───────── diagnostics & tools
+async function loadDiag(){
+  const h=await api('km','&value=health');
+  if(h){
+    q('#dgScore').textContent=h.score+' / 100';
+    q('#dgScore').style.color=h.score>=80?'#00d68f':(h.score>=50?'#ffb84d':'#ff5f56');
+    q('#dgComp').innerHTML=(h.components||[]).map(c=>
+      `<div class="row"><span class="k">${c.name}</span><span class="v">${c.value} (کسر ${c.penalty})</span></div>`).join('');
+  }
+  const e=await api('km','&value=events&n=40');
+  if(e) q('#dgEvents').innerHTML=(e.events||[]).map(ev=>
+    `<div class="row"><span class="k">${fmtMs(ev.ts)} <small style="color:#4f8cff">${ev.type}</small></span>
+     <span class="v" style="font-size:10.5px">${ev.detail||''}</span></div>`).join('')
+    ||'<div class="hint">هنوز رویدادی ثبت نشده</div>';
+  const hist=await api('km','&value=history&n=30');
+  if(hist) q('#dgHistory').innerHTML=(hist.entries||[]).map(c=>
+    `<div class="row"><span class="k">${fmtMs(c.ts)} ${c.id} <span class="badge risk-${c.status==='ok'||c.status==='restored'?'low':'high'}">${c.status}</span></span>
+     <span class="v" style="font-size:10px;direction:ltr">${c.path.split('/').pop()||''}: ${c.old||'∅'} → ${c.new||'∅'}</span></div>`).join('')
+    ||'<div class="hint">تغییری ثبت نشده</div>';
+  loadBenchList();
+  // A/B profile options
+  const pl=await api('kmprof','&value=list');
+  if(pl){
+    const opts=(pl.profiles||[]).map(p=>`<option>${p.name}</option>`).join('');
+    q('#abA').innerHTML=opts; q('#abB').innerHTML=opts;
+    if(pl.profiles.length>1){ q('#abA').value=pl.profiles[0].name; q('#abB').value=pl.profiles[1].name; }
+  }
+  loadDiagCaps();
+}
+async function loadDiagCaps(){
+  const d=await api('km','&value=caps'); if(!d) return;
+  const rw=(d.controls||[]).filter(c=>c.rw==='rw').length;
+  const ro=(d.controls||[]).filter(c=>c.rw==='r').length;
+  const no=(d.controls||[]).filter(c=>c.rw==='-'||c.rw==='' ).length;
+  q('#dgCaps').innerHTML=
+    `<div class="row"><span class="k">کرنل</span><span class="v">${d.kernel||'—'} (${d.arch||''})</span></div>`+
+    `<div class="row"><span class="k">محیط روت</span><span class="v">${d.root_env||'—'}</span></div>`+
+    `<div class="row"><span class="k">قابلیت‌های شناسایی‌شده</span><span class="v">${d.count} مورد — ${rw} قابل‌نویسی، ${ro} فقط‌خواندنی، ${no} در دسترس نیست</span></div>`+
+    '<div class="hint" style="margin-top:7px">«در دسترس نیست» یعنی کرنل/سیستم آن رابط را روی این دستگاه ارائه نکرده — HPC آن را نه‌تنها نمی‌نویسد، بلکه اصلاً آن را «فعال» نشان نمی‌دهد.</div>';
+}
+async function loadBenchList(){
+  const d=await api('kmbench','&value=list'); if(!d) return;
+  q('#dgBench').innerHTML=(d.runs||[]).slice(0,6).map(r=>
+    `<div class="row"><span class="k">${fmtMs(r.ts)} ${r.name}</span>
+     <span class="v">${r.result!=null?r.result+' <small style="color:#5c6675">'+(r.unit||'')+'</small>':'خاموش'+(r.error?' — '+r.error:'')}</span></div>`).join('')
+    ||'<div class="hint">هنوز بنچمارکی اجرا نشده</div>';
+}
+async function kmBench(name){
+  toast('در حال اجرای بنچمارک '+name+'…','');
+  const d=await api('kmbench','&value=run:'+name);
+  if(d&&d.ok){ toast('نتیجه: '+(d.result||'—')+' '+(d.unit||''),'ok'); loadBenchList(); }
+  else toast((d&&d.error)||'بنچمارک ناموفق','err');
+}
+async function kmBenchAB(){
+  const b=q('#abBench').value, a=q('#abA').value, bb=q('#abB').value;
+  if(!confirm('بنچمارک روی پروفایل «'+a+'» و «'+bb+'» اجرا می‌شود و پروفایل فعلی موقتاً عوض می‌شود. ادامه؟')) return;
+  toast('در حال اجرا… حدود ۳۰ ثانیه','');
+  const d=await api('kmbench','&value=ab:'+b+':'+a+':'+bb);
+  if(d&&d.ok){
+    const cmp=d.compare&&d.compare.ok?` — اختلاف: ${d.compare.delta_pct}% (B نسبت به A)`:'';
+    q('#dgAb').innerHTML=`<div class="ok-box">A(${a}): ${d.run_a.result||'—'} | B(${bb}): ${d.run_b.result||'—'}${cmp}<br><small>پروفایل قبلی (${d.restored_profile}) بازیابی شد. اعداد ترکیبی‌اند — برای قضاوت، چند بار تکرار کنید.</small></div>`;
+    loadBenchList();
+  } else toast((d&&d.error)||'A/B ناموفق','err');
+}
+async function kmRollback(n){
+  if(!confirm(n==='all'?'همهٔ تغییرات ثبت‌شده به مقدار قبل برگردانده شوند؟':'آخرین '+n+' تغییر بازگردد؟')) return;
+  const d=await api('kmrollback','&value='+n);
+  if(d&&d.ok) toast('بازگشت: '+(d.restored||0)+' مورد'+(d.failed?' — '+d.failed+' ناموفق':''),'ok');
+  else toast((d&&d.error)||'بازگشت ناموفق','err');
+  loadDiag(); loadStatus();
+}
+async function kmReport(){
+  toast('در حال ساخت گزارش…','');
+  const d=await api('kmreport','&value=run');
+  if(d&&d.ok){
+    q('#dgReport').innerHTML=`<div class="ok-box">گزارش ساخت شد:<br><small style="direction:ltr;display:block">${d.path}</small><small style="direction:ltr;display:block">نسخهٔ Redacted: ${d.export}</small><br>برای بردن آن: adb pull "${d.export}"</div>`;
+  } else toast((d&&d.error)||'خطا در ساخت گزارش','err');
+}
+
+// ───────── assistant
+async function loadAdvise(){
+  const d=await api('kmadvise','&value=full'); if(!d) return;
+  q('#advFacts').innerHTML=(d.facts||[]).map(f=>`• ${f.fact} <small style="color:#4f8cff">(${f.source})</small><br>`).join('')||'—';
+  q('#advFindings').innerHTML=(d.findings||[]).map(f=>
+    `<div class="finding ${f.severity}">
+       <div class="ft">${f.title} <span class="badge risk-${f.severity}">${f.severity}</span>
+        <span class="badge ${f.kind==='observed'?'rw':'no'}">${f.kind==='observed'?'مشاهدهٔ‌شده':'استدلالی'}</span></div>
+       <div class="fx">${f.explanation}</div>
+       ${(f.suggestions||[]).map(s=>
+         `<div class="sugg"><div class="st">${s.reason} <span class="badge ${s.valid?'rw':'no'}">${s.valid?'قابل اجرا':'روی این دستگاه نامعتبر'}</span>${s.risk&&s.risk!=='low'?` <span class="badge risk-${s.risk}">${s.risk}</span>`:''}</div></div>`).join('')}
+     </div>`).join('')||'<div class="hint">یافته‌ای با اولویت قابل‌توجه یافت نشد — دستگاه در وضعیت عادی به نظر می‌رسد.</div>';
+}
+async function advExplain(){
+  const id=q('#advId').value.trim(); if(!id) return;
+  const d=await api('kmadvise','&value=explain:'+encodeURIComponent(id));
+  if(!d){ toast('خطا','err'); return; }
+  q('#advExplain').innerHTML=
+    `<div class="row"><span class="k">مقدار فعلی</span><span class="v">${d.current}</span></div>`+
+    (d.kernel_list?`<div class="row"><span class="k">لیست کرنل</span><span class="v">${d.kernel_list}</span></div>`:'')+
+    (d.device_detail?`<div class="row"><span class="k">دادهٔ دستگاه</span><span class="v">${d.device_detail}</span></div>`:'')+
+    `<div class="hint" style="margin-top:8px">${d.explanation_general}</div>`;
 }
 
 // ───────── cleaner
@@ -739,7 +1227,7 @@ window.addEventListener('appinstalled',()=>{
 // Deep links from the manifest shortcuts: /?tab=4 opens the battery tab.
 (function(){
   const t=parseInt(new URLSearchParams(location.search).get('tab'),10);
-  if(!isNaN(t) && t>=0 && t<=7) tab(t);
+  if(!isNaN(t) && t>=0 && t<=10) tab(t);
 })();
 
 // ───────── boot
@@ -750,7 +1238,12 @@ loadStatus();
 // background - the exact opposite of what a thermal tool should do.
 function startPolling(){
   if(timer) return;
-  timer=setInterval(()=>{ if(cur===0 && !document.hidden) loadStatus(); },3000);
+  timer=setInterval(()=>{
+    if(document.hidden) return;
+    if(cur===0) loadStatus();
+    else if(cur===3 && kmSubIdx===0) loadKmCpu();
+    else if(cur===5) loadMemTherm();
+  },3000);
 }
 function stopPolling(){ clearInterval(timer); timer=null; }
 document.addEventListener('visibilitychange',()=>{

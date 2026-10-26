@@ -5,7 +5,7 @@ Magisk module for Android.
 Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal
 protection, never pins clocks, fully reversible.
 
-- **Version:** v1.9.0 (versionCode 10900)
+- **Version:** v1.10.0 (versionCode 11000)
 - **WebUI:** `http://127.0.0.1:1111` — loopback only, started by the
   Magisk **Action** button (`action.sh`) or at boot (`WEBUI_AUTOSTART=1`)
 - **CLI:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh [command]`
@@ -13,7 +13,8 @@ protection, never pins clocks, fully reversible.
 ## What it does
 
 - **Profiles** — `cool`, `balanced`, `performance`, `gaming90`,
-  `gaming120`. Each is a set of percentage-based hints
+  `gaming120`, plus v1.10: `battery_saver`, `silent`, `multitasking`,
+  `standby`. Each is a set of percentage-based hints
   (CPU/GPU frequency window, governor preference, scheduler latency, VM
   tuning, thermal thresholds) translated into verified sysfs writes.
 - **Game detection** — cheap `/proc` scan (no `dumpsys`) for configured
@@ -24,8 +25,14 @@ protection, never pins clocks, fully reversible.
   flapping. The kernel's thermal governor remains the authority.
 - **Battery awareness** — downgrades the profile at low charge and limits
   performance when the battery itself runs hot.
-- **Kernel manager** — I/O scheduler, TCP congestion control, zRAM
-  reporting, read-only battery health / charge-rate reporting.
+- **Kernel manager (v1.10 platform)** — discovery-driven capability
+  registry (what this kernel exposes, read vs writable), validated
+  typed writes with kernel-list enums and hw frequency limits,
+  transactions with automatic partial-failure rollback, audited
+  change log + `km rollback`, read-only health/bench/report/diag
+  with redacted exports, a local rule-based assistant (observed vs
+  inferred, AI backend off by default), and a plugin system for
+  device adapters. Full details in `docs/kernel_platform.md`.
 - **Cleaner** — root cleanup of regenerable system junk (tmp files, ANR /
   tombstone reports, cache partition, thumbnail caches, ART cache in deep
   mode). The target list is hardcoded in `cleaner.sh`; user data is never
@@ -68,6 +75,9 @@ uninstall.sh           restores every value the module changed
 system.prop            conservative overlay properties (resetprop)
 config/config.conf     default main config (seeded to /data/adb/hamedis)
 config/profiles/       default profiles (seeded, user-editable copies)
+plugins/               device adapters (e.g. adapter_xiaomi_vayu.sh)
+tests/                 shell test suites (fake sysfs, no root needed)
+docs/                  architecture notes (kernel_platform.md)
 scripts/               shell libraries: detection, profiles, thermal,
                        battery, RAM, graphics, kernel, safety, monitor,
                        game detection, logger, WebUI control

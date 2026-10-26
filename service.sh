@@ -96,6 +96,16 @@ while true; do
     # --- thermal management
     thermal_tick
 
+    # --- kernel platform: event timeline + plugin hooks (cheap reads)
+    km_event_tick 2>/dev/null
+    hpc_tick_plugins 2>/dev/null
+
+    # --- capability re-scan every ~10 ticks: detect interfaces that
+    # appeared/disappeared (kernel module load, ROM tuner, reboot)
+    if [ $(( _tick % 10 )) -eq 0 ]; then
+        km_caps_scan 2>/dev/null
+    fi
+
     # --- periodic heartbeat, deliberately infrequent
     if [ $(( _tick % 20 )) -eq 0 ]; then
         log_info "heartbeat: profile=$(current_profile) thermal=$(thermal_get_state) game=$(game_current_pkg)"

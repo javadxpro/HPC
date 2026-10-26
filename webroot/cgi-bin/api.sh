@@ -97,7 +97,7 @@ jnum() {
 #   ?action=profile_detail&value=../../state/original_values
 # escaped the profile directory. Names are now checked against a fixed
 # list and the path is built by one function only.
-HPC_VALID_PROFILES="cool balanced performance gaming90 gaming120"
+HPC_VALID_PROFILES="cool balanced performance gaming90 gaming120 longevity battery_saver silent multitasking standby"
 
 valid_profile() {
     case "$1" in
@@ -127,7 +127,8 @@ ACTION=$(qs_get action)
 # Reject anything that is not a known action before it reaches dispatch.
 case "$ACTION" in
     status|profiles|profile_detail|kernel|games|setprofile|\
-    setio|settcp|tune|do|log|ping|clean|cleanrun|ramclean|boost|boostset) ;;
+    setio|settcp|tune|do|log|ping|clean|cleanrun|ramclean|boost|boostset|\
+    km|kmctl|kmrollback|kmprof|kmbench|kmadvise|kmreport) ;;
     *) printf '{"error":"invalid action"}'; exit 0 ;;
 esac
 
@@ -501,6 +502,210 @@ api_boostset() {
     esac
 }
 
+# ================================================================
+# Kernel Management Platform endpoints (v1.10)
+#
+# Thin wrappers over the km_* functions; every write goes through the
+# registry's validate -> protect -> safe_write -> log pipeline.
+# ================================================================
+
+# strict [a-z0-9] name check for anything that becomes a filename
+_km_name_ok() {
+    # a-z0-9_ only, 1-40 chars (no dots, no slashes - no traversal possible)
+    case "$1" in
+        ''|*[!a-z0-9_]*|.) return 1 ;;
+    esac
+    [ "${#1}" -le 40 ]
+}
+
+# ---------------------------------------------------------- km (monitoring)
+api_km() {
+    _kmsub=$(qs_get value)
+    case "$_kmsub" in
+        status)   km_mon_status ;;
+        cpu)      km_mon_cpu ;;
+        gpu)      km_mon_gpu ;;
+        mem)      km_mon_mem ;;
+        thermal)  km_mon_thermal ;;
+        battery)  km_mon_batt ;;
+        net)      km_mon_net ;;
+        disk)     km_mon_disk ;;
+        sched)    km_mon_sched ;;
+        procs)    km_mon_procs ;;
+        modules)  km_mon_modules ;;
+        klog)
+            _kln=$(qs_get n); case "$_kln" in ''|*[!0-9]*) _kln=100 ;; esac
+            km_mon_klog "$_kln" "$(qs_get pat)"
+            ;;
+        caps)     km_caps_json ;;
+        events)
+            _ken=$(qs_get n); case "$_ken" in ''|*[!0-9]*) _ken=60 ;; esac
+            km_events "$_ken" "$(qs_get type)"
+            ;;
+        health)   km_health ;;
+        history)
+            _khn=$(qs_get n); case "$_khn" in ''|*[!0-9]*) _khn=50 ;; esac
+            # TSV -> JSON
+            _kj=""
+            _kf=1
+            while IFS="$(printf '\t')" read -r h_ts h_id h_path h_old h_new h_src h_prof h_st h_ver; do
+                [ -n "$h_ts" ] || continue
+                [ "$_kf" = "1" ] || _kj="$_kj,"
+                _kf=0
+                _kj="$_kj{\"ts\":$h_ts,\"id\":$(jstr "$h_id"),\"path\":$(jstr "$h_path"),\"old\":$(jstr "$h_old"),\"new\":$(jstr "$h_new"),\"source\":$(jstr "$h_src"),\"profile\":$(jstr "$h_prof"),\"status\":$(jstr "$h_st"),\"verified\":$(jstr "$h_ver")}"
+            done <<EOT
+$(km_history "$_khn")
+EOT
+            printf '{"ts":%s,"entries":[%s]}\n' "$(date +%s000)" "$_kj"
+            ;;
+        *)        printf '{"error":"unknown km sub: %s"}' "$_kmsub" ;;
+    esac
+}
+
+# ---------------------------------------------------------- kmctl (writes)
+api_kmctl() {
+    _kcid=$(qs_get id)
+    _kcval=$(qs_get value)
+    _kcsrc=$(qs_get src)
+    [ -n "$_kcsrc" ] || _kcsrc="ui"
+    # id/value travel in the query string; the registry re-validates
+    # everything anyway (characters, ranges, enums, protected paths).
+    km_ctl_set "$_kcid" "$_kcval" "$_kcsrc"
+}
+
+# ---------------------------------------------------------- kmrollback
+api_kmrollback() {
+    _krn=$(qs_get value)
+    case "$_krn" in ''|all|[0-9]*) ;; *) printf '{"error":"bad value"}'; return 0 ;; esac
+    km_rollback "$_krn"
+}
+
+# ---------------------------------------------------------- kmprof (profiles)
+api_kmprof() {
+    _kpv=$(qs_get value)
+    case "$_kpv" in
+        list)
+            km_prof_list
+            ;;
+        show:*)
+            _kp="${_kpv#show:}"
+            _km_name_ok "$_kp" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_prof_show "$_kp"
+            ;;
+        compare:*)
+            _kp="${_kpv#compare:}"
+            _kpa="${_kp%%,*}"; _kpb="${_kp#*,}"
+            _km_name_ok "$_kpa" && _km_name_ok "$_kpb" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_prof_compare "$_kpa" "$_kpb"
+            ;;
+        export:*)
+            _kp="${_kpv#export:}"
+            _km_name_ok "$_kp" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_prof_export "$_kp"
+            ;;
+        duplicate:*)
+            _kp="${_kpv#duplicate:}"
+            _kps="${_kp%%,*}"; _kpd="${_kp#*,}"
+            _km_name_ok "$_kps" && _km_name_ok "$_kpd" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_prof_duplicate "$_kps" "$_kpd"
+            ;;
+        delete:*)
+            _kp="${_kpv#delete:}"
+            _km_name_ok "$_kp" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_prof_delete "$_kp"
+            ;;
+        import)
+            _kp=$(qs_get name)
+            _kb64=$(qs_get b64)
+            _km_name_ok "$_kp" || { printf '{"error":"bad profile name"}'; return 0; }
+            [ -n "$_kb64" ] || { printf '{"error":"no content"}'; return 0; }
+            # only base64 alphabet allowed
+            case "$_kb64" in
+                *[!A-Za-z0-9+/=]*) printf '{"error":"bad base64"}'; return 0 ;;
+            esac
+            [ "${#_kb64}" -le 8192 ] || { printf '{"error":"content too large"}'; return 0; }
+            _kpc=$(printf '%s' "$_kb64" | base64 -d 2>/dev/null)
+            [ -n "$_kpc" ] || { printf '{"error":"bad base64 payload"}'; return 0; }
+            km_prof_import "$_kp" "$_kpc"
+            ;;
+        *)
+            printf '{"error":"unknown kmprof sub"}'
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------- kmbench
+api_kmbench() {
+    _kbn=$(qs_get value)
+    case "$_kbn" in
+        list)
+            km_bench_list
+            ;;
+        run:*)
+            _kbname="${_kbn#run:}"
+            case "$_kbname" in cpu|cpux|io|mem) ;; *) printf '{"error":"unknown benchmark"}'; return 0 ;; esac
+            km_bench_run "$_kbname"
+            ;;
+        ab:*)
+            _kb="${_kbn#ab:}"
+            _kbname="${_kb%%:*}"; _kbrest="${_kb#*:}"
+            _kbpa="${_kbrest%%:*}"; _kbpbb="${_kbrest#*:}"
+            case "$_kbname" in cpu|cpux|io|mem) ;; *) printf '{"error":"unknown benchmark"}'; return 0 ;; esac
+            _km_name_ok "$_kbpa" && _km_name_ok "$_kbpbb" || { printf '{"error":"bad profile name"}'; return 0; }
+            km_bench_ab "$_kbname" "$_kbpa" "$_kbpbb"
+            ;;
+        *)
+            printf '{"error":"unknown kmbench sub"}'
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------- kmadvise
+api_kmadvise() {
+    _kav=$(qs_get value)
+    case "$_kav" in
+        full|"")
+            km_advise
+            ;;
+        explain:*)
+            _kae="${_kav#explain:}"
+            [ -n "$_kae" ] || { printf '{"error":"missing control id"}'; return 0; }
+            case "$_kae" in *[\;\&\|\$\`]*) printf '{"error":"bad id"}'; return 0 ;; esac
+            km_advise_explain "$_kae"
+            ;;
+        *)
+            printf '{"error":"unknown kmadvise sub"}'
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------- kmreport
+api_kmreport() {
+    _krr=$(qs_get value)
+    case "$_krr" in
+        run)
+            km_diag_report
+            ;;
+        file:*)
+            _krf="${_krr#file:}"
+            case "$_krf" in
+                report_[0-9]*_redacted.txt)
+                    _krpath="/data/local/tmp/hpc_exports/$_krf"
+                    [ -f "$_krpath" ] || { printf '{"error":"export not found"}'; return 0; }
+                    printf '{"ok":1,"file":"%s","content":%s}\n' \
+                        "$(jstr "$_krf")" "$(jstr "$(cat "$_krpath" 2>/dev/null)")"
+                    ;;
+                *)
+                    printf '{"error":"bad export name"}'
+                    ;;
+            esac
+            ;;
+        *)
+            printf '{"error":"unknown kmreport sub"}'
+            ;;
+    esac
+}
+
 # -------------------------------------------------------------- router
 case "$ACTION" in
     status)        api_status ;;
@@ -520,5 +725,12 @@ case "$ACTION" in
     ramclean)      api_ramclean ;;
     boost)         api_boost ;;
     boostset)      api_boostset ;;
+    km)            api_km ;;
+    kmctl)         api_kmctl ;;
+    kmrollback)    api_kmrollback ;;
+    kmprof)        api_kmprof ;;
+    kmbench)       api_kmbench ;;
+    kmadvise)      api_kmadvise ;;
+    kmreport)      api_kmreport ;;
     *)             printf '{"error":"unknown action"}' ;;
 esac

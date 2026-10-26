@@ -7,7 +7,7 @@
 HPC_ID="hamedis_performance_core"
 HPC_NAME="Hamedis Performance Core"
 HPC_SHORT="HPC"
-HPC_VERSION="1.8.19"
+HPC_VERSION="1.10.0"
 
 HPC_MODDIR="${HPC_MODDIR:-/data/adb/modules/$HPC_ID}"
 HPC_DATA="${HPC_DATA:-/data/adb/hamedis}"
@@ -35,7 +35,8 @@ hpc_init_config() {
         chmod 0600 "$HPC_CONFIG" 2>/dev/null
     fi
 
-    for _p in cool balanced performance gaming90 gaming120; do
+    for _p in cool balanced performance gaming90 gaming120 longevity \
+              battery_saver silent multitasking standby; do
         if [ ! -f "$HPC_DATA/profiles/$_p.conf" ] && \
            [ -f "$HPC_MODDIR/config/profiles/$_p.conf" ]; then
             cp -f "$HPC_MODDIR/config/profiles/$_p.conf" \
@@ -121,9 +122,13 @@ hpc_load_config() {
 }
 
 hpc_load_libs() {
+    # Order matters: the km_* (kernel management platform) layers sit on
+    # top of detector/safety/kernel_manager and must load after them.
     for _lib in logger safety detector profile_manager thermal_manager \
                 ram_manager battery_manager graphics_manager kernel_manager webui game_detector monitor \
-                cleaner booster; do
+                cleaner booster \
+                km_discover km_registry km_events km_monitor km_bench \
+                km_diag km_advise km_profiles plugin_loader; do
         # shellcheck source=/dev/null
         [ -f "$HPC_SCRIPTS/$_lib.sh" ] && . "$HPC_SCRIPTS/$_lib.sh"
     done
@@ -139,4 +144,21 @@ hpc_bootstrap() {
     hpc_log_init
     hpc_safety_init
     load_capabilities
+    # Kernel Management Platform: load plugins, then build the
+    # capability registry (discovery + change detection).
+    hpc_load_plugins
+    # The service loop keeps the registry current; a CGI request only
+    # needs to scan when the registry is missing or older than 60 s.
+    # (HPC_KM_SCAN_FORCE=1 always scans - used by the test harness.)
+    if [ "${HPC_KM_SCAN_FORCE:-0}" = "1" ]; then
+        km_caps_scan
+    else
+        _hb_reg="$HPC_STATE/caps2/registry.tsv"
+        _hb_fresh=0
+        if [ -f "$_hb_reg" ]; then
+            _hb_age=$(( $(date +%s) - $(stat -c %Y "$_hb_reg" 2>/dev/null || printf '0') ))
+            [ "$_hb_age" -ge 0 ] && [ "$_hb_age" -lt 60 ] && _hb_fresh=1
+        fi
+        [ "$_hb_fresh" = "1" ] || km_caps_scan
+    fi
 }

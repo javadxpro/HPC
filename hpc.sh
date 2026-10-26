@@ -31,6 +31,11 @@
 #   stopmon       stop recording early
 #   log           show recent log lines
 #   caps          show detected hardware capabilities
+#   km [sub]      kernel management platform:
+#                   status|cpu|gpu|mem|thermal|battery|net|disk|sched|
+#                   procs|modules|klog|caps|events|health|history|
+#                   rollback|set ID VAL|get ID|prof ...|bench ...|
+#                   advise|report
 #   help          this text
 # shellcheck disable=SC3043
 
@@ -348,6 +353,59 @@ case "$CMD" in
         fi
         ;;
 
+    # ── Kernel Management Platform ─────────────────────────────────
+    km)
+        _km_sub="${2:-status}"
+        case "$_km_sub" in
+            status)   km_mon_status ;;
+            cpu)      km_mon_cpu ;;
+            gpu)      km_mon_gpu ;;
+            mem)      km_mon_mem ;;
+            thermal)  km_mon_thermal ;;
+            battery)  km_mon_batt ;;
+            net)      km_mon_net ;;
+            disk)     km_mon_disk ;;
+            sched)    km_mon_sched ;;
+            procs)    km_mon_procs ;;
+            modules)  km_mon_modules ;;
+            klog)     km_mon_klog "${3:-100}" "${4:-}" ;;
+            caps)     km_caps_scan; km_caps_json ;;
+            events)   km_events "${3:-40}" "${4:-}" ;;
+            health)   km_health ;;
+            history)  km_history "${3:-50}" ;;
+            rollback) km_rollback "${3:-all}" ;;
+            set)
+                [ -n "${3:-}" ] && [ -n "${4:-}" ] || { printf 'usage: hpc.sh km set <control-id> <value>\n'; break 2; }
+                km_ctl_set "$3" "$4" "cli"
+                ;;
+            get)      [ -n "${3:-}" ] && km_ctl_get "$3" && printf '\n' || printf 'control not found\n' ;;
+            prof)
+                case "${3:-list}" in
+                    list)     km_prof_list ;;
+                    show:*)   km_prof_show "${3#show:}" ;;
+                    compare:*) km_prof_compare "${3#compare:%%,*}" "${3#compare:*,*}" ;;
+                    export:*) km_prof_export "${3#export:}" ;;
+                    duplicate:*) km_prof_duplicate "${3#duplicate:%%,*}" "${3#duplicate:*,*}" ;;
+                    delete:*) km_prof_delete "${3#delete:}" ;;
+                    *)        printf 'usage: hpc.sh km prof list|show:P|compare:A,B|export:P|duplicate:A,B|delete:P\n' ;;
+                esac
+                ;;
+            bench)
+                case "${3:-list}" in
+                    list)   km_bench_list 10 ;;
+                    run:*)  km_bench_run "${3#run:}" "${4:-3000}" ;;
+                    ab:*)   _kba="${3#ab:}"; km_bench_ab "${_kba%%:*}" "${_kba#*:%%:*}" "${_kba#*:#*:}" "${4:-3000}" ;;
+                    *)      printf 'usage: hpc.sh km bench list|run:NAME|ab:NAME:PA:PB\n' ;;
+                esac
+                ;;
+            advise)   [ "${3:-}" = "explain" ] && km_advise_explain "${4:-}" || km_advise ;;
+            report)   km_diag_report ;;
+            *)
+                printf 'usage: hpc.sh km [status|cpu|gpu|mem|thermal|battery|net|disk|sched|procs|modules|klog|caps|events|health|history|rollback|set|get|prof|bench|advise|report]\n'
+                ;;
+        esac
+        ;;
+
     clean)
         _clean_mode="${2:-scan}"
         case "$_clean_mode" in
@@ -403,7 +461,7 @@ case "$CMD" in
         ;;
 
     help|-h|--help)
-        sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
         ;;
 
     *)
