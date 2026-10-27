@@ -42,7 +42,11 @@ web_kill_cmdline() {
     for _wkc_d in /proc/[0-9]*; do
         _wkc_pid="${_wkc_d#/proc/}"
         [ "$_wkc_pid" = "$$" ] && continue
-        _wkc_cl=$(tr '\0' ' ' <"$_wkc_d/cmdline" 2>/dev/null) || continue
+        # 2>/dev/null must precede the input redirect: dash applies
+        # redirects left-to-right, so a process that dies between the
+        # glob and the read would otherwise leak a "can't open
+        # /proc/N/cmdline" message onto the Action-button log.
+        _wkc_cl=$(tr '\0' ' ' 2>/dev/null <"$_wkc_d/cmdline") || continue
         case "$_wkc_cl" in
             *httpd*$_wkc_pat*)
                 [ "$_wkc_pid" = "$$" ] && continue
