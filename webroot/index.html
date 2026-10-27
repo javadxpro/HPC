@@ -358,6 +358,17 @@ POLL_INTERVAL=30'
              oninput="lbl('lSwap',this.value)" onchange="tune('VM_SWAPPINESS',this.value)">
     </div>
   </div>
+  <div class="card">
+    <h2>رندرر گرافیکی (HWUI)</h2>
+    <div id="gfxRend"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="btns" style="margin-top:9px">
+      <button onclick="setRend('vulkan')">Vulkan</button>
+      <button onclick="setRend('gles')">OpenGL (Skia)</button>
+      <button onclick="setRend('legacy')">Legacy OpenGL</button>
+      <button onclick="setRend('default')">حالت پیش‌فرض</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Vulkan بار ران‌تایم گرافیکی روی CPU را به‌مراتب کم می‌کند (در بازی‌ها معمولاً بهتر است). تغییر روی اپ‌هایی اعمال می‌شود که <b>بعد از تغییر اجرا شوند</b> — برای اثر فوری، اپ را ری‌استارت یا دستگاه را ری‌بوت کن.</div>
+  </div>
 </div>
 
 <!-- ══════════ کرنل ══════════ -->
@@ -881,8 +892,12 @@ async function loadStatus(){
 }
 
 // ───────── profiles
-const PROF_FA={cool:'خنک',balanced:'متعادل',performance:'عملکرد',
-               gaming90:'گیمینگ ۹۰',gaming120:'گیمینگ ۱۲۰'};
+// The curated profile set (v1.12.0): these are the only built-in
+// profiles. User-created profiles fall back to their id.
+const PROF_FA={overclock:'اورکلاک (تا ته)',gaming120:'گیمینگ ۱۲۰',
+               gaming90:'گیمینگ ۹۰',performance:'عملکرد',
+               balanced:'متعادل',battery_saver:'ذخیره باتری',
+               longevity:'موبایل آسیب دیده'};
 async function loadProfiles(){
   const d=await api('profiles'); if(!d) return;
   q('#profList').innerHTML=d.list.map(p=>`
@@ -985,8 +1000,28 @@ async function loadTune(){
   set('rIdle','lIdle','GPU_IDLE_TIMER','ms');
   set('rPoll','lPoll','POLL_INTERVAL','s');
   set('rSwap','lSwap','VM_SWAPPINESS','');
+  loadRend();
 }
 function pickTune(p){ tuneProf=p; loadTune(); }
+
+// ───────── graphics renderer (HWUI backend)
+const REND_FA={vulkan:'Vulkan',gles:'OpenGL (Skia)',legacy:'Legacy OpenGL'};
+async function loadRend(){
+  const el=q('#gfxRend'); if(!el) return;
+  const d=await api('renderer');
+  if(!d||!d.ok){ el.innerHTML='<div class="hint">دریافت نشد</div>'; return; }
+  let h=`<div class="row"><span class="k">وضعیت فعلی</span><span class="v">${d.current||'—'}</span></div>`;
+  h+=`<div class="row"><span class="k">درایور Vulkan</span><span class="v">${d.vulkan_available
+      ? (d.vulkan_info||'available') : 'وجود ندارد'}</span></div>`;
+  el.innerHTML=h;
+}
+async function setRend(mode){
+  const d=await api('renderer','&value='+mode);
+  if(d&&d.ok){
+    toast('رندرر: '+(REND_FA[mode]||mode)+' — برای اپ‌های بعدی','ok');
+    loadRend();
+  } else toast((d&&d.error)||'ناموفق','err');
+}
 async function tune(k,v){
   const r=await api('tune',`&profile=${tuneProf}&key=${k}&value=${v}`);
   if(r&&r.ok){

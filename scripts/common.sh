@@ -40,14 +40,56 @@ hpc_init_config() {
         chmod 0600 "$HPC_CONFIG" 2>/dev/null
     fi
 
-    for _p in cool balanced performance gaming90 gaming120 longevity \
-              battery_saver silent multitasking standby; do
+    # The shipped profile set is curated: these are the ONLY built-in
+    # profiles. Seeded copies are tracked by hash in
+    # $HPC_STATE/profiles_seed.txt so that on update we can remove a
+    # profile that no longer ships - but ONLY if the user never touched
+    # the copy (a modified copy is treated as a user profile and kept).
+    for _p in overclock gaming120 gaming90 performance balanced battery_saver longevity; do
         if [ ! -f "$HPC_DATA/profiles/$_p.conf" ] && \
            [ -f "$HPC_MODDIR/config/profiles/$_p.conf" ]; then
             cp -f "$HPC_MODDIR/config/profiles/$_p.conf" \
                   "$HPC_DATA/profiles/$_p.conf" 2>/dev/null
         fi
+        [ -f "$HPC_DATA/profiles/$_p.conf" ] || continue
+        _ph=$(sha1sum "$HPC_DATA/profiles/$_p.conf" 2>/dev/null | cut -d' ' -f1)
+        [ -n "$_ph" ] || continue
+        # record (replacing any earlier hash for this name)
+        if [ -f "$HPC_STATE/profiles_seed.txt" ]; then
+            _ps_new=$(awk -F '\t' -v n="$_p" '$2==n{next}{print}' \
+                         "$HPC_STATE/profiles_seed.txt" 2>/dev/null)
+            printf '%s\n' "$_ps_new" | grep -v '^$' >"$HPC_STATE/profiles_seed.tmp" 2>/dev/null
+            printf '%s\t%s\n' "$_ph" "$_p" >>"$HPC_STATE/profiles_seed.tmp" 2>/dev/null
+            mv -f "$HPC_STATE/profiles_seed.tmp" "$HPC_STATE/profiles_seed.txt" 2>/dev/null
+        else
+            printf '%s\t%s\n' "$_ph" "$_p" >"$HPC_STATE/profiles_seed.txt" 2>/dev/null
+        fi
     done
+
+    # Remove stale seeded copies of profiles that no longer ship.
+    # A copy is removed only when its hash matches what WE seeded -
+    # user-modified or user-created profiles are never touched.
+    if [ -f "$HPC_STATE/profiles_seed.txt" ]; then
+        while IFS="$(printf '\t')" read -r _old_ph _old_p; do
+            [ -n "$_old_p" ] || continue
+            if [ ! -f "$HPC_MODDIR/config/profiles/$_old_p.conf" ] && \
+               [ -f "$HPC_DATA/profiles/$_old_p.conf" ]; then
+                _cur_ph=$(sha1sum "$HPC_DATA/profiles/$_old_p.conf" 2>/dev/null | cut -d' ' -f1)
+                if [ "$_cur_ph" = "$_old_ph" ]; then
+                    rm -f "$HPC_DATA/profiles/$_old_p.conf" 2>/dev/null
+                    log_info "profile $_old_p no longer ships - seeded copy removed"
+                fi
+            fi
+        done <"$HPC_STATE/profiles_seed.txt"
+        # drop entries for profiles that no longer ship (kept ones above
+        # are gone from the list; reseed of surviving ones refreshes hashes)
+        _ps_new=""
+        for _p in overclock gaming120 gaming90 performance balanced battery_saver longevity; do
+            _line=$(awk -F '\t' -v n="$_p" '$2==n{print;exit}' "$HPC_STATE/profiles_seed.txt" 2>/dev/null)
+            [ -n "$_line" ] && _ps_new="${_ps_new}${_line}\n"
+        done
+        [ -n "$_ps_new" ] && printf '%b' "$_ps_new" >"$HPC_STATE/profiles_seed.txt" 2>/dev/null
+    fi
 }
 
 # Add keys introduced by newer versions to an existing config, without

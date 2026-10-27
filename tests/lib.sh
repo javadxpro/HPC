@@ -29,9 +29,38 @@ getprop() {
         ro.product.cpu.abi) printf 'arm64-v8a' ;;
         ro.serialno)        printf 'FAKESERIAL123' ;;
         sys.boot_completed) printf '1' ;;
-        *) printf '' ;;
+        *)
+            # dynamic properties written by the resetprop stub below
+            _gp_v=$(awk -F '\t' -v k="$1" '$1==k{print $2; exit}' \
+                       "$T/props.txt" 2>/dev/null)
+            [ -n "$_gp_v" ] && { printf '%s' "$_gp_v"; return 0; }
+            printf ''
+            ;;
     esac
 }
+# resetprop stub: stores key/value pairs so tests can verify what a
+# code path "wrote" without touching a real Android property service.
+resetprop() {
+    case "$1" in
+        --delete)
+            _rp_k="$2"
+            if [ -f "$T/props.txt" ]; then
+                awk -F '\t' -v k="$_rp_k" '$1!=k' "$T/props.txt" >"$T/props.tmp" 2>/dev/null
+                mv -f "$T/props.tmp" "$T/props.txt" 2>/dev/null
+            fi
+            return 0
+            ;;
+        *)
+            _rp_k="$1"; _rp_v="$2"
+            [ -f "$T/props.txt" ] || : >"$T/props.txt"
+            awk -F '\t' -v k="$_rp_k" '$1==k{next}{print}' "$T/props.txt" 2>/dev/null >"$T/props.tmp"
+            printf '%s\t%s\n' "$_rp_k" "$_rp_v" >>"$T/props.tmp"
+            mv -f "$T/props.tmp" "$T/props.txt" 2>/dev/null
+            return 0
+            ;;
+    esac
+}
+
 log_info()      { [ "${HPC_TEST_VERBOSE:-0}" = "1" ] && printf 'INFO  %s\n' "$*" >&2; return 0; }
 log_debug()     { return 0; }
 log_warn()      { [ "${HPC_TEST_VERBOSE:-0}" = "1" ] && printf 'WARN  %s\n' "$*" >&2; return 0; }

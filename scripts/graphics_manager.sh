@@ -281,6 +281,69 @@ gfx_enable_gles() {
 # platform behaviour, not a bug in the module - which is exactly why we
 # report it rather than pretending the change is instant.
 
+# gfx_set_renderer MODE - manual renderer switch (WebUI / CLI).
+#   vulkan  - force the Vulkan backend (needs a Vulkan driver)
+#   gles    - force the Skia/GLES backend
+#   legacy  - the pre-Skia legacy OpenGL backend
+#   default - restore the value the device had before HPC touched it
+#             (from the backup file); if HPC never changed it, the
+#             property is deleted so the ROM default applies.
+# NOTE: HWUI reads this property when an app process starts, so the
+# change affects apps launched afterwards - we say so, we don't
+# pretend it is instant, and we never force-stop apps on the user's
+# behalf.
+gfx_set_renderer() {
+    case "$1" in
+        vulkan)
+            gfx_enable_vulkan
+            ;;
+        gles)
+            gfx_enable_gles
+            ;;
+        legacy)
+            _gfx_set_prop debug.hwui.renderer opengl
+            log_info "graphics: HWUI backend -> legacy OpenGL"
+            ;;
+        default)
+            _dr_orig=""
+            if [ -f "$HPC_GFX_BACKUP" ]; then
+                _dr_orig=$(awk -F '\t' '$1=="debug.hwui.renderer"{print $2; exit}' \
+                             "$HPC_GFX_BACKUP" 2>/dev/null)
+            fi
+            if [ -n "$_dr_orig" ]; then
+                _gfx_set_prop debug.hwui.renderer "$_dr_orig"
+                log_info "graphics: HWUI backend restored to $_dr_orig"
+            else
+                command -v resetprop >/dev/null 2>&1 || return 1
+                resetprop --delete debug.hwui.renderer 2>/dev/null
+                log_info "graphics: HWUI renderer property deleted (ROM default)"
+            fi
+            ;;
+        *)
+            log_warn "unknown renderer mode: $1"
+            return 1
+            ;;
+    esac
+}
+
+# gfx_renderer_json - state of the graphics renderer for the WebUI.
+# (values come from getprop: alnum/dots/dashes - strip anything else
+# rather than pulling in the km_ JSON helpers, which load after this
+# library)
+_gfx_jstr() {
+    printf '"%s"' "$(printf '%s' "$1" | tr -d '"\\\000-\037\177')"
+}
+
+gfx_renderer_json() {
+    _rj_cur=$(gfx_current_renderer 2>/dev/null)
+    _rj_vk=0
+    gfx_vulkan_available 2>/dev/null && _rj_vk=1
+    _rj_vi="null"
+    [ "$_rj_vk" = "1" ] && _rj_vi=$(_gfx_jstr "$(gfx_vulkan_version 2>/dev/null)")
+    printf '{"ok":1,"current":%s,"vulkan_available":%s,"vulkan_info":%s,"modes":["vulkan","gles","legacy","default"]}' \
+        "$(_gfx_jstr "$_rj_cur")" "$_rj_vk" "$_rj_vi"
+}
+
 apply_graphics() {
     _gm="${GFX_RENDERER:-auto}"
 

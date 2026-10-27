@@ -6,10 +6,14 @@
 #
 # Commands:
 #   status        show current state (default)
-#   cool          switch to COOL profile
-#   balanced      switch to BALANCED profile
-#   performance   switch to PERFORMANCE profile
+#   overclock     switch to OVERCLOCK (everything at stock hardware limit)
 #   gaming120     switch to GAMING120 profile (high-refresh gaming)
+#   gaming90      switch to GAMING90 profile
+#   performance   switch to PERFORMANCE profile
+#   balanced      switch to BALANCED profile
+#   battery_saver switch to BATTERY SAVER profile
+#   longevity     switch to LONGEVITY profile (damaged/degrading hardware)
+#   renderer      show graphics renderer; renderer vulkan|gles|legacy|default
 #   kernel        show kernel tunables and battery health
 #   webui         start the web interface on port 1111
 #   webstop       stop the web interface
@@ -173,7 +177,7 @@ case "$CMD" in
         _status
         ;;
 
-    cool|balanced|performance|gaming90|gaming120)
+    overclock|gaming120|gaming90|performance|balanced|battery_saver|longevity)
         _switch "$CMD"
         ;;
 
@@ -334,6 +338,36 @@ case "$CMD" in
     webstop)
         web_stop
         printf 'WebUI stopped.\n'
+        ;;
+
+    renderer)
+        # renderer [vulkan|gles|legacy|default] - graphics (HWUI) renderer
+        if [ -z "${2:-}" ]; then
+            printf 'Renderer : %s\n' "$(gfx_current_renderer 2>/dev/null)"
+            if gfx_vulkan_available 2>/dev/null; then
+                printf 'Vulkan   : available%s\n' "$(gfx_vulkan_version 2>/dev/null | sed 's/^/( /; s/$/) /')"
+            else
+                printf 'Vulkan   : not present\n'
+            fi
+            printf 'Options  : vulkan | gles | legacy | default\n'
+            printf 'Note     : applies to apps launched after the change.\n'
+        else
+            case "${2:-}" in
+                vulkan|gles|legacy|default)
+                    if gfx_set_renderer "${2:-}"; then
+                        printf 'Renderer set to: %s\n' "$(gfx_current_renderer 2>/dev/null)"
+                        printf 'Applies to apps launched from now on (restart an app or reboot to apply immediately).\n'
+                    else
+                        printf 'Failed to set renderer (no resetprop or no Vulkan driver?).\n'
+                        exit 1
+                    fi
+                    ;;
+                *)
+                    printf 'usage: hpc.sh renderer [vulkan|gles|legacy|default]\n'
+                    exit 1
+                    ;;
+            esac
+        fi
         ;;
 
     log)
@@ -573,7 +607,7 @@ case "$CMD" in
 
     *)
         printf 'Unknown command: %s\n' "$CMD"
-        printf "Try: status | cool | balanced | performance | gaming90 | gaming120 | kernel | webui | game | stop-game | monitor | report | sessions | save | compare | stopmon | reload | reset | log | caps | config | config-fix | magisk | km doctor\n"
+        printf "Try: status | overclock | balanced | performance | gaming90 | gaming120 | battery_saver | longevity | kernel | webui | game | stop-game | monitor | report | sessions | save | compare | stopmon | reload | reset | log | caps | config | config-fix | magisk | renderer | km doctor\n"
         exit 1
         ;;
 esac

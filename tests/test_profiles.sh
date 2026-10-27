@@ -15,6 +15,46 @@ check "list contains balanced" "$(printf '%s' "$l" | grep -q '"name":"balanced"'
 check "list marks current" "$(printf '%s' "$l" | grep -q '"current":"balanced"' && echo 0 || echo 1)"
 check "new profiles present" "$(printf '%s' "$l" | grep -q '"name":"battery_saver"' && echo 0 || echo 1)"
 
+echo "== curated profile set (v1.12.0) =="
+# exactly the 7 shipped profiles - no more, no less
+for _cp in overclock gaming120 gaming90 performance balanced battery_saver longevity; do
+    check "shipped: $_cp" "$(printf '%s' "$l" | grep -q "\"name\":\"$_cp\"" && echo 0 || echo 1)"
+done
+for _cp in cool silent multitasking standby; do
+    check "removed: $_cp" "$(printf '%s' "$l" | grep -q "\"name\":\"$_cp\"" && echo 1 || echo 0)"
+done
+# the new overclock profile pins CPU floor to the hardware max
+oc=$(km_prof_show overclock)
+check "overclock shows" "$(printf '%s' "$oc" | grep -q 'CPU_MIN_PERCENT' && echo 0 || echo 1)"
+check "overclock floor=100" "$(printf '%s' "$oc" | grep -q '"CPU_MIN_PERCENT":"100"' && echo 0 || echo 1)"
+check "overclock keeps GPU throttling on" "$(printf '%s' "$oc" | grep -q '"GPU_THROTTLING":"1"' && echo 0 || echo 1)"
+
+echo "== seed cleanup (stale seeded profiles) =="
+# NOTE: nested command substitutions inside double quotes use PLAIN
+# double quotes - \" there would stay a literal backslash in dash.
+# shellcheck source=/dev/null
+. "$HPC_SCRIPTS/common.sh"
+hpc_init_dirs
+hpc_init_config
+check "seeded: overclock in data dir" "$([ -f "$HPC_DATA/profiles/overclock.conf" ] && echo 0 || echo 1)"
+check "seed manifest written" "$([ -s "$HPC_STATE/profiles_seed.txt" ] && echo 0 || echo 1)"
+# a stale seeded copy (untouched) of a removed profile gets cleaned
+cp "$MOD/config/profiles/balanced.conf" "$HPC_DATA/profiles/cool.conf"
+printf '%s\tcool\n' "$(sha1sum "$HPC_DATA/profiles/cool.conf" | cut -d' ' -f1)" >>"$HPC_STATE/profiles_seed.txt"
+# a stale copy the USER modified must be kept
+printf 'PROFILE_NAME="MINE"\n' >"$HPC_DATA/profiles/standby.conf"
+printf '000000000000000000000000000000000000dead\tstandby\n' >>"$HPC_STATE/profiles_seed.txt"
+hpc_init_config
+check "stale seeded copy removed" "$([ ! -f "$HPC_DATA/profiles/cool.conf" ] && echo 0 || echo 1)"
+check "user-modified stale copy kept" "$([ -f "$HPC_DATA/profiles/standby.conf" ] && echo 0 || echo 1)"
+# the delete test below expects no seeded builtin copies in the user
+# dir - remove the ones this section created (keep user semantics clean)
+rm -f "$HPC_DATA/profiles/standby.conf"
+for _cp in overclock gaming120 gaming90 performance balanced battery_saver longevity; do
+    rm -f "$HPC_DATA/profiles/$_cp.conf"
+done
+rm -f "$HPC_STATE/profiles_seed.txt"
+
 echo "== show / compare =="
 s=$(km_prof_show balanced)
 check_json "show json" "$s"

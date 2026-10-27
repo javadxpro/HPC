@@ -109,7 +109,10 @@ jnum() {
 #   ?action=profile_detail&value=../../state/original_values
 # escaped the profile directory. Names are now checked against a fixed
 # list and the path is built by one function only.
-HPC_VALID_PROFILES="cool balanced performance gaming90 gaming120 longevity battery_saver silent multitasking standby"
+# The curated built-in profile set (v1.12.0). User-created profiles are
+# handled separately (kmprof), this list only guards the built-in name
+# -> path mapping.
+HPC_VALID_PROFILES="overclock gaming120 gaming90 performance balanced battery_saver longevity"
 
 valid_profile() {
     case "$1" in
@@ -140,7 +143,7 @@ ACTION=$(qs_get action)
 case "$ACTION" in
     status|profiles|profile_detail|kernel|games|setprofile|\
     setio|settcp|tune|do|log|ping|clean|cleanrun|ramclean|boost|boostset|\
-    km|kmctl|kmrollback|kmprof|kmbench|kmadvise|kmreport|mgsk) ;;
+    km|kmctl|kmrollback|kmprof|kmbench|kmadvise|kmreport|mgsk|renderer) ;;
     *) printf '{"error":"invalid action"}'; exit 0 ;;
 esac
 
@@ -150,6 +153,32 @@ esac
 api_ping() {
     printf '{"ok":true,"version":%s,"module":%s}' \
         "$(jstr "${HPC_VERSION:-?}")" "$(jstr "$(basename "$HPC_MODDIR")")"
+}
+
+# ---------------------------------------------------------- renderer
+# Global HWUI renderer switch (debug.hwui.renderer). Valueless = report
+# state; with value = switch (vulkan|gles|legacy|default). Only affects
+# apps launched afterwards - the API says so, it does not force-stop
+# anything on the user's behalf.
+api_renderer() {
+    _rv=$(qs_get value)
+    case "$_rv" in
+        ''|null)
+            gfx_renderer_json
+            printf '\n'
+            ;;
+        vulkan|gles|legacy|default)
+            if gfx_set_renderer "$_rv"; then
+                printf '{"ok":true,"current":%s,"note":"applies to apps launched after this change"}\n' \
+                    "$(jstr "$(gfx_current_renderer 2>/dev/null)")"
+            else
+                printf '{"ok":false,"error":"failed to set renderer (resetprop missing or no Vulkan driver)"}\n'
+            fi
+            ;;
+        *)
+            printf '{"ok":false,"error":"bad renderer mode (use vulkan|gles|legacy|default)"}\n'
+            ;;
+    esac
 }
 
 # ---------------------------------------------------------------- status
@@ -821,5 +850,6 @@ case "$ACTION" in
     kmadvise)      api_kmadvise ;;
     kmreport)      api_kmreport ;;
     mgsk)          api_mgsk ;;
+    renderer)      api_renderer ;;
     *)             printf '{"error":"unknown action"}' ;;
 esac

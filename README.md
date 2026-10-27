@@ -5,18 +5,25 @@ Magisk module for Android.
 Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal
 protection, never pins clocks, fully reversible.
 
-- **Version:** v1.11.2 (versionCode 11102)
+- **Version:** v1.12.0 (versionCode 11200)
 - **WebUI:** `http://127.0.0.1:1111` — loopback only, started by the
   Magisk **Action** button (`action.sh`) or at boot (`WEBUI_AUTOSTART=1`)
 - **CLI:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh [command]`
 
 ## What it does
 
-- **Profiles** — `cool`, `balanced`, `performance`, `gaming90`,
-  `gaming120`, plus v1.10: `battery_saver`, `silent`, `multitasking`,
-  `standby`. Each is a set of percentage-based hints
+- **Profiles** — a curated set of seven (v1.12.0): `overclock`
+  (everything at the stock hardware limit), `gaming120`, `gaming90`,
+  `performance`, `balanced`, `battery_saver`, `longevity` (for damaged
+  or degrading hardware). Each is a set of percentage-based hints
   (CPU/GPU frequency window, governor preference, scheduler latency, VM
   tuning, thermal thresholds) translated into verified sysfs writes.
+  `overclock` never exceeds the kernel's stock frequency table and
+  thermal protection is never disabled, in any profile.
+- **Graphics renderer (v1.12.0)** — switch the HWUI backend
+  (Vulkan / OpenGL-Skia / legacy) from the WebUI or
+  `hpc.sh renderer`, with the original value backed up and restored on
+  uninstall. Applies to apps launched after the change.
 - **Game detection** — cheap `/proc` scan (no `dumpsys`) for configured
   packages; switches to the gaming profile while the game runs and
   restores the previous profile on exit.
@@ -100,7 +107,9 @@ profiles live under `/data/adb/hamedis` (survives module updates).
 
 ```
 status             show current state (default)
-cool|balanced|...  switch profile
+overclock|gaming120|gaming90|performance|balanced|battery_saver|longevity
+                   switch profile
+renderer [mode]    show/set graphics renderer (vulkan|gles|legacy|default)
 game|stop-game     force/leave gaming profile
 kernel             kernel tunables and battery health
 webui|webstop      start/stop the web interface

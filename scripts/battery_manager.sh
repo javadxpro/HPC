@@ -30,9 +30,9 @@ battery_adjust_profile() {
             ''|*[!0-9]*) ;;
             *)
                 if [ "$_cap" -le "$BATT_CRITICAL" ] && [ "$_charging" -eq 0 ]; then
-                    [ "$_req" != "cool" ] && \
-                        log_info "battery ${_cap}%: forcing cool"
-                    printf 'cool'
+                    [ "$_req" != "battery_saver" ] && \
+                        log_info "battery ${_cap}%: forcing battery_saver"
+                    printf 'battery_saver'
                     return 0
                 fi
                 if [ "$_cap" -le "$BATT_LOW" ] && [ "$_charging" -eq 0 ]; then

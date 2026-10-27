@@ -85,15 +85,15 @@ echo "== config guard (a broken config cannot kill the API) =="
 # shellcheck source=/dev/null
 . "$HPC_SCRIPTS/common.sh"
 # 1) valid config passes
-printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+printf 'MODE=balanced\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
 check "valid config ok" "$( [ "$(hpc_config_check)" = "ok" ] && echo 0 || echo 1 )"
 # 2) syntax error is caught with a line number
-printf '# header\nMODE=cool\nbroken ( line\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+printf '# header\nMODE=balanced\nbroken ( line\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
 chk=$(hpc_config_check)
 check "syntax error flagged" "$([ "$chk" != "ok" ] && echo 0 || echo 1)"
 check "syntax error has line number" "$(printf '%s' "$chk" | grep -qE '[0-9]+:' && echo 0 || echo 1)"
 # 3) stray word (valid syntax, executed at source time) is caught
-printf 'MODE=cool\ncool\n' >"$HPC_CONFIG"
+printf 'MODE=balanced\ngamemode\n' >"$HPC_CONFIG"
 chk=$(hpc_config_check)
 check "stray word flagged" "$([ "$chk" != "ok" ] && echo 0 || echo 1)"
 check "stray word says not found" "$(printf '%s' "$chk" | grep -q 'not found' && echo 0 || echo 1)"
@@ -102,14 +102,50 @@ hpc_load_config
 check "load survives broken config" "$( [ "$POLL_INTERVAL" = "45" ] && echo 0 || echo 1 )"
 check "load fell back to default MODE" "$( [ "$MODE" = "balanced" ] && echo 0 || echo 1 )"
 # 5) a repaired/clean config passes again
-printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+printf 'MODE=balanced\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
 check "clean config ok again" "$( [ "$(hpc_config_check)" = "ok" ] && echo 0 || echo 1 )"
 # 6) with a broken config the API still answers (degraded defaults)
-printf 'MODE=cool\ncool\n' >"$HPC_CONFIG"
+printf 'MODE=balanced\ngamemode\n' >"$HPC_CONFIG"
 r=$(call_api2 "action=ping")
 check_json "api json despite broken config" "$r"
 check "api answers despite broken config" "$(printf '%s' "$r" | grep -q '"ok":true' && echo 0 || echo 1)"
-printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+printf 'MODE=balanced\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+
+echo "== renderer (HWUI backend) =="
+# (API-level checks are driver-independent; the Vulkan driver path is
+# tested at function level below, where the detection can be faked.)
+r=$(call_api2 "action=renderer")
+check_json "renderer report json" "$r"
+check "renderer report has current" "$(printf '%s' "$r" | grep -q '"current":' && echo 0 || echo 1)"
+check "renderer report lists modes" "$(printf '%s' "$r" | grep -q '"modes":\["vulkan","gles","legacy","default"\]' && echo 0 || echo 1)"
+# bad mode rejected
+r=$(call_api2 "action=renderer&value=bogus")
+check_json "renderer bad mode json" "$r"
+check "renderer bad mode rejected" "$(printf '%s' "$r" | grep -q '"ok":false' && echo 0 || echo 1)"
+# gles applies without needing a Vulkan driver (resetprop stub records it)
+r=$(call_api2 "action=renderer&value=gles")
+check "renderer gles applied" "$(printf '%s' "$r" | grep -q '"ok":true' && grep -q '^debug.hwui.renderer	skiagl$' "$T/props.txt" 2>/dev/null && echo 0 || echo 1)"
+# legacy + default are accepted
+r=$(call_api2 "action=renderer&value=legacy")
+check "renderer legacy applied" "$(printf '%s' "$r" | grep -q '"ok":true' && grep -q '^debug.hwui.renderer	opengl$' "$T/props.txt" 2>/dev/null && echo 0 || echo 1)"
+r=$(call_api2 "action=renderer&value=default")
+check "renderer default ok" "$(printf '%s' "$r" | grep -q '"ok":true' && echo 0 || echo 1)"
+
+# function level: Vulkan driver path (detection faked in THIS shell;
+# graphics_manager is not loaded by source_hpc, load it explicitly -
+# from $MOD because the earlier common.sh source repointed HPC_SCRIPTS
+# at the fake module dir)
+# shellcheck source=/dev/null
+. "$MOD/scripts/graphics_manager.sh"
+gfx_vulkan_available() { return 1; }
+gfx_set_renderer vulkan >/dev/null 2>&1
+check "vulkan refused without driver" "$(grep -q 'debug.hwui.renderer' "$T/props.txt" 2>/dev/null && echo 1 || echo 0)"
+gfx_vulkan_available() { return 0; }
+gfx_set_renderer vulkan >/dev/null 2>&1
+check "vulkan applied with driver" "$(grep -q '^debug.hwui.renderer	skiavk$' "$T/props.txt" 2>/dev/null && echo 0 || echo 1)"
+_rj_out=$(gfx_renderer_json)
+check_json "renderer json valid" "$_rj_out"
+check "renderer json reports vulkan available" "$(printf '%s' "$_rj_out" | grep -q '"vulkan_available":1' && echo 0 || echo 1)"
 
 echo "== backward compat: old endpoints still work =="
 r=$(call_api2 "action=ping")
