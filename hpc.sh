@@ -407,6 +407,65 @@ case "$CMD" in
         esac
         ;;
 
+    magisk)
+        _mg_sub="${2:-info}"
+        case "$_mg_sub" in
+            info)
+                if magisk_present; then
+                    printf 'Magisk        : %s (code %s)\n' "$(magisk_version)" "$(magisk_version_code)"
+                    printf 'Tmpfs path    : %s\n' "$(magisk_tmp_path)"
+                    case "$(magisk_zygisk)" in
+                        1)  printf 'Zygisk        : on\n' ;;
+                        0)  printf 'Zygisk        : off\n' ;;
+                        *)  printf 'Zygisk        : unknown\n' ;;
+                    esac
+                    case "$(magisk_denylist_enforced)" in
+                        1)  printf 'DenyList      : enforced\n' ;;
+                        0)  printf 'DenyList      : off\n' ;;
+                        *)  printf 'DenyList      : unknown\n' ;;
+                    esac
+                    printf 'Modules       : %s installed\n' "$(magisk_modules_count)"
+                    printf 'HTTPD backend : %s\n' "$(hpc_web_httpd)"
+                else
+                    printf 'Magisk not detected (this build runs under a different root environment)\n'
+                fi
+                ;;
+            modules)
+                magisk_modules_list | while IFS="$(printf '\t')" read -r _mi _mn _mv _mc; do
+                    [ -n "$_mi" ] || continue
+                    printf '%-32s %-24s %s\n' "$_mi" "$_mn" "$_mv"
+                done
+                ;;
+            denylist)
+                if magisk_present; then
+                    case "$(magisk_denylist_enforced)" in
+                        1)  printf 'DenyList: enforced\n' ;;
+                        0)  printf 'DenyList: off\n' ;;
+                        *)  printf 'DenyList: unknown\n' ;;
+                    esac
+                    magisk_denylist_ls | sed 's/|$//' | sed 's/|/  /'
+                else
+                    printf 'Magisk not detected\n'
+                fi
+                ;;
+            deny-add)
+                [ -n "${3:-}" ] || { printf 'usage: hpc.sh magisk deny-add <package>\n'; break; }
+                magisk_denylist_add "$3"
+                ;;
+            deny-rm)
+                [ -n "${3:-}" ] || { printf 'usage: hpc.sh magisk deny-rm <package>\n'; break; }
+                magisk_denylist_rm "$3"
+                ;;
+            update)
+                [ -n "${3:-}" ] || { printf 'usage: hpc.sh magisk update <zip-under-/data/local/tmp>\n'; break; }
+                hpc_self_update "$3"
+                ;;
+            *)
+                printf 'usage: hpc.sh magisk [info|modules|denylist|deny-add <pkg>|deny-rm <pkg>|update <zip>]\n'
+                ;;
+        esac
+        ;;
+
     clean)
         _clean_mode="${2:-scan}"
         case "$_clean_mode" in

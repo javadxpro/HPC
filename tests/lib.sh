@@ -204,6 +204,8 @@ source_hpc() {
     # shellcheck source=/dev/null
     . "$HPC_SCRIPTS/km_profiles.sh"
     # shellcheck source=/dev/null
+    . "$HPC_SCRIPTS/magisk_sys.sh"
+    # shellcheck source=/dev/null
     . "$HPC_SCRIPTS/plugin_loader.sh"
 }
 

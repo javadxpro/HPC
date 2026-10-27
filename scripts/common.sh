@@ -128,7 +128,7 @@ hpc_load_libs() {
                 ram_manager battery_manager graphics_manager kernel_manager webui game_detector monitor \
                 cleaner booster \
                 km_discover km_registry km_events km_monitor km_bench \
-                km_diag km_advise km_profiles plugin_loader; do
+                km_diag km_advise km_profiles magisk_sys plugin_loader; do
         # shellcheck source=/dev/null
         [ -f "$HPC_SCRIPTS/$_lib.sh" ] && . "$HPC_SCRIPTS/$_lib.sh"
     done

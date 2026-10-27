@@ -317,6 +317,28 @@ km_doctor() {
         _dk_f=$((_dk_f + 1)); printf 'FAIL  web  WebUI assets missing\n'
     fi
 
+    # -- root / magisk environment ----------------------------------------------
+    if command -v magisk_bin >/dev/null 2>&1; then
+        if magisk_present 2>/dev/null; then
+            _dk_mv=$(magisk_version 2>/dev/null)
+            _dk_mc=$(magisk_version_code 2>/dev/null)
+            _dk_mb=$(hpc_web_httpd 2>/dev/null)
+            if [ "$_dk_mv" != "unknown" ]; then
+                _dk_p=$((_dk_p + 1)); printf 'PASS  magisk  version %s (code %s)\n' "$_dk_mv" "${_dk_mc:-?}"
+            else
+                _dk_w=$((_dk_w + 1)); printf 'WARN  magisk  version unreadable (daemon not ready?)\n'
+            fi
+            case "$_dk_mb" in
+                busybox:*)
+                    _dk_p=$((_dk_p + 1)); printf 'PASS  httpd  backend available: %s\n' "$_dk_mb" ;;
+                *)
+                    _dk_f=$((_dk_f + 1)); printf 'FAIL  httpd  no busybox httpd backend (WebUI cannot start)\n' ;;
+            esac
+        else
+            _dk_w=$((_dk_w + 1)); printf 'WARN  magisk  not detected (other root environment?); magisk features off\n'
+        fi
+    fi
+
     # -- summary ------------------------------------------------------------------
     if [ "$_dk_f" -eq 0 ] && [ "$_dk_w" -eq 0 ]; then
         printf 'DOCTOR RESULT: PASS (p=%s w=%s f=%s)\n' "$_dk_p" "$_dk_w" "$_dk_f"

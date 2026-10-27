@@ -128,7 +128,7 @@ ACTION=$(qs_get action)
 case "$ACTION" in
     status|profiles|profile_detail|kernel|games|setprofile|\
     setio|settcp|tune|do|log|ping|clean|cleanrun|ramclean|boost|boostset|\
-    km|kmctl|kmrollback|kmprof|kmbench|kmadvise|kmreport) ;;
+    km|kmctl|kmrollback|kmprof|kmbench|kmadvise|kmreport|mgsk) ;;
     *) printf '{"error":"invalid action"}'; exit 0 ;;
 esac
 
@@ -710,6 +710,78 @@ api_kmreport() {
     esac
 }
 
+# ---------------------------------------------------------- mgsk (magisk system)
+api_mgsk() {
+    _mgv=$(qs_get value)
+    case "$_mgv" in
+        info)
+            _mgi_present=0; magisk_present 2>/dev/null && _mgi_present=1
+            _mgi_ver="";  [ "$_mgi_present" = 1 ] && _mgi_ver=$(magisk_version 2>/dev/null)
+            _mgi_code=""; [ "$_mgi_present" = 1 ] && _mgi_code=$(magisk_version_code 2>/dev/null)
+            _mgi_tmp="";  [ "$_mgi_present" = 1 ] && _mgi_tmp=$(magisk_tmp_path 2>/dev/null)
+            _mgi_z="";    [ "$_mgi_present" = 1 ] && _mgi_z=$(magisk_zygisk 2>/dev/null)
+            _mgi_d="";    [ "$_mgi_present" = 1 ] && _mgi_d=$(magisk_denylist_enforced 2>/dev/null)
+            _mgi_n=$(magisk_modules_count 2>/dev/null)
+            _mgi_h=$(hpc_web_httpd 2>/dev/null)
+            _mgi_w=0; web_running 2>/dev/null && _mgi_w=1
+            printf '{"ok":1,"present":%s,"version":%s,"versionCode":%s,"tmpPath":%s,"zygisk":%s,"denylistEnforced":%s,"modules":%s,"httpdBackend":%s,"webuiRunning":%s}\n' \
+                "$_mgi_present" "$(jstr "$_mgi_ver")" "$(jnum "$_mgi_code")" "$(jstr "$_mgi_tmp")" \
+                "$(jnum "$_mgi_z")" "$(jnum "$_mgi_d")" "$(jnum "$_mgi_n")" \
+                "$(jstr "$_mgi_h")" "$_mgi_w"
+            ;;
+        modules)
+            _mgo='{"ok":1,"modules":['
+            _mgo_first=1
+            while IFS="$(printf '\t')" read -r _mgo_id _mgo_name _mgo_ver _mgo_code; do
+                [ -n "$_mgo_id" ] || continue
+                [ "$_mgo_first" = 1 ] || _mgo="$_mgo,"
+                _mgo_first=0
+                _mgo="$_mgo{\"id\":$(jstr "$_mgo_id"),\"name\":$(jstr "$_mgo_name"),\"version\":$(jstr "$_mgo_ver"),\"versionCode\":$(jnum "$_mgo_code")}"
+            done <<EOF
+$(magisk_modules_list 2>/dev/null)
+EOF
+            _mgo="$_mgo]}"
+            printf '%s\n' "$_mgo"
+            ;;
+        denylist)
+            _mgd_enf=""; magisk_present 2>/dev/null && _mgd_enf=$(magisk_denylist_enforced 2>/dev/null)
+            _mgd='{"ok":1,"enforced":'
+            case "$_mgd_enf" in
+                1) _mgd="${_mgd}true" ;;
+                0) _mgd="${_mgd}false" ;;
+                *) _mgd="${_mgd}null" ;;
+            esac
+            _mgd="$_mgd,\"entries\":["
+            _mgd_first=1
+            while IFS='|' read -r _mgd_pkg _mgd_proc; do
+                [ -n "$_mgd_pkg" ] || continue
+                [ "$_mgd_first" = 1 ] || _mgd="$_mgd,"
+                _mgd_first=0
+                _mgd="$_mgd{\"pkg\":$(jstr "$_mgd_pkg"),\"proc\":$(jstr "${_mgd_proc:-}")}"
+            done <<EOF
+$(magisk_denylist_ls 2>/dev/null)
+EOF
+            _mgd="$_mgd]}"
+            printf '%s\n' "$_mgd"
+            ;;
+        denyadd)
+            _mga=$(qs_get pkg)
+            magisk_denylist_add "$_mga"
+            ;;
+        denyrmm)
+            _mgr=$(qs_get pkg)
+            magisk_denylist_rm "$_mgr"
+            ;;
+        update)
+            _mgu=$(qs_get zip)
+            hpc_self_update "$_mgu"
+            ;;
+        *)
+            printf '{"error":"unknown mgsk sub"}'
+            ;;
+    esac
+}
+
 # -------------------------------------------------------------- router
 case "$ACTION" in
     status)        api_status ;;
@@ -736,5 +808,6 @@ case "$ACTION" in
     kmbench)       api_kmbench ;;
     kmadvise)      api_kmadvise ;;
     kmreport)      api_kmreport ;;
+    mgsk)          api_mgsk ;;
     *)             printf '{"error":"unknown action"}' ;;
 esac

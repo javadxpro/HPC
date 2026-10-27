@@ -34,9 +34,27 @@ web_running() {
     [ -d "/proc/$_wp" ]
 }
 
+# Kill any process whose /proc cmdline mentions the given pattern.
+# Portable: Android's toybox has no pkill applet, and since Magisk v31+
+# the busybox applet dir is no longer on the module script PATH.
+web_kill_cmdline() {
+    _wkc_pat="$1"
+    for _wkc_d in /proc/[0-9]*; do
+        _wkc_pid="${_wkc_d#/proc/}"
+        [ "$_wkc_pid" = "$$" ] && continue
+        _wkc_cl=$(tr '\0' ' ' <"$_wkc_d/cmdline" 2>/dev/null) || continue
+        case "$_wkc_cl" in
+            *httpd*$_wkc_pat*)
+                [ "$_wkc_pid" = "$$" ] && continue
+                kill "$_wkc_pid" 2>/dev/null
+                ;;
+        esac
+    done
+    return 0
+}
+
 web_start() {
-    pkill -f "busybox.*httpd.*$HPC_WEB_PORT" 2>/dev/null
-    pkill -f "httpd.*127.0.0.1:$HPC_WEB_PORT" 2>/dev/null
+    web_kill_cmdline "127.0.0.1:$HPC_WEB_PORT"
     sleep 1
 
     _bb=$(web_busybox) || {
@@ -92,8 +110,7 @@ web_stop() {
         rm -f "$HPC_WEB_PID" 2>/dev/null
     fi
     # Belt and braces: kill any stray httpd on our port.
-    pkill -f "httpd -f -p 127.0.0.1:$HPC_WEB_PORT" 2>/dev/null
-    pkill -f "httpd.*127.0.0.1:$HPC_WEB_PORT" 2>/dev/null
+    web_kill_cmdline "127.0.0.1:$HPC_WEB_PORT"
     log_info "webui: stopped"
     return 0
 }

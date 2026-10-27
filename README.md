@@ -5,7 +5,7 @@ Magisk module for Android.
 Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal
 protection, never pins clocks, fully reversible.
 
-- **Version:** v1.10.0 (versionCode 11000)
+- **Version:** v1.11.0 (versionCode 11100)
 - **WebUI:** `http://127.0.0.1:1111` — loopback only, started by the
   Magisk **Action** button (`action.sh`) or at boot (`WEBUI_AUTOSTART=1`)
 - **CLI:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh [command]`
@@ -25,14 +25,22 @@ protection, never pins clocks, fully reversible.
   flapping. The kernel's thermal governor remains the authority.
 - **Battery awareness** — downgrades the profile at low charge and limits
   performance when the battery itself runs hot.
-- **Kernel manager (v1.10 platform)** — discovery-driven capability
-  registry (what this kernel exposes, read vs writable), validated
-  typed writes with kernel-list enums and hw frequency limits,
-  transactions with automatic partial-failure rollback, audited
-  change log + `km rollback`, read-only health/bench/report/diag
-  with redacted exports, a local rule-based assistant (observed vs
-  inferred, AI backend off by default), and a plugin system for
-  device adapters. Full details in `docs/kernel_platform.md`.
+- **Kernel manager (v1.10/v1.11 platform)** — discovery-driven
+  capability registry (what this kernel exposes, read vs writable),
+  validated typed writes with kernel-list enums and hw frequency
+  limits, transactions with automatic partial-failure rollback,
+  audited change log + `km rollback`, read-only health/bench/report/
+  diag with redacted exports, a local rule-based assistant (observed
+  vs inferred, AI backend off by default), an on-device self-check
+  (`km doctor`), and a plugin system for device adapters.
+  Full details in `docs/kernel_platform.md`.
+- **Magisk system integration (v1.11)** — detects the new Magisk
+  (v31+, Rust core) environment: version/version-code via the official
+  CLI, tmpfs path, Zygisk state, DenyList status + add/remove through
+  `magisk --denylist` (strict package-name validation), module
+  inventory, and the httpd backend actually available to the WebUI.
+  WebUI tab «مجیسک» + `hpc.sh magisk …`. Module self-update from
+  `/data/local/tmp` via `magisk --install-module` (HPC zips only).
 - **Cleaner** — root cleanup of regenerable system junk (tmp files, ANR /
   tombstone reports, cache partition, thumbnail caches, ART cache in deep
   mode). The target list is hardcoded in `cleaner.sh`; user data is never

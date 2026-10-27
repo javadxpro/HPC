@@ -73,8 +73,17 @@ if [ -f "$BOOSTERSET" ] && command -v settings >/dev/null 2>&1; then
 fi
 
 # --- stop the service if it is still running --------------------------
-pkill -f "hamedis_performance_core/service.sh" 2>/dev/null
-pkill -f "httpd.*127.0.0.1:1111" 2>/dev/null
+# Portable /proc scan: Android toybox has no pkill applet.
+for _upk_d in /proc/[0-9]*; do
+    _upk_pid="${_upk_d#/proc/}"
+    [ "$_upk_pid" = "$$" ] && continue
+    _upk_cl=$(tr '\0' ' ' <"$_upk_d/cmdline" 2>/dev/null) || continue
+    case "$_upk_cl" in
+        *hamedis_performance_core/service.sh*|*httpd*127.0.0.1:1111*)
+            kill "$_upk_pid" 2>/dev/null
+            ;;
+    esac
+done
 
 # --- clean runtime state, KEEP the user's config and logs -------------
 # Someone reinstalling should not lose their game list and tuning.

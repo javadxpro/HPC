@@ -76,6 +76,7 @@ kmprof&value=list|show:N|compare:A,B|export:N|duplicate:S,D|delete:N|import&name
 kmbench&value=list|run:NAME|ab:NAME:PA:PB
 kmadvise&value=full|explain:ID
 kmreport&value=run|file:NAME|doctor  (NAME must match report_[0-9]*_redacted.txt)
+mgsk&value=info|modules|denylist|denyadd&pkg=<pkg>|denyrmm&pkg=<pkg>|update&zip=<path>
 ```
 
 `kmreport&value=doctor` runs the on-device self-check (`km_doctor`) and
@@ -96,6 +97,8 @@ hpc.sh km [status|cpu|gpu|mem|thermal|battery|net|disk|sched|procs|
              rollback [N|all]|set <id> <value>|get <id>|
              prof <list|show N|compare A B|export N>|
              bench <list|run NAME>|advise|report|doctor]
+
+hpc.sh magisk [info|modules|denylist|deny-add <pkg>|deny-rm <pkg>|update <zip>]
 ```
 
 `hpc.sh km doctor` prints one line per check
@@ -107,7 +110,7 @@ reporting a problem.
 
 ## Testing
 
-`sh tests/run_tests.sh` runs seven suites (169 checks) against a
+`sh tests/run_tests.sh` runs eight suites (217 checks) against a
 fake sysfs tree in `mktemp` — **no root, no device needed**:
 
 - discovery (full tree, missing interfaces, read-only detection,
@@ -130,6 +133,44 @@ Known environment limitation: the suites run under the host shell's
 `/proc` (load, memory, process lists) where a device would use its
 own; the kernel-controlled state (cpufreq, gpu, thermal, block,
 power supply) is fully faked.
+
+## Magisk v31 compatibility (verified against topjohnwu/Magisk source)
+
+Magisk 31.x is a Rust-rewrite of the core. Facts that matter for HPC,
+checked in the source (`native/src/core/*`, `docs/changes.md`):
+
+- Data layout is unchanged: `/data/adb/magisk/` (DATABIN) still holds
+  `magisk`, `magisk32`, `magiskpolicy` and **busybox**; the tmpfs
+  (`/sbin/.magisk/`) holds the busybox applet dir, `modules/` and the
+  daemon socket. `/data/adb/magisk/busybox` is a hard requirement of
+  `setup_magisk_env()`, so the WebUI's busybox httpd backend still
+  exists on v31.x devices.
+- **Behaviour change:** module scripts are still executed with
+  `<busybox> sh`, but the script PATH is now `system PATH + $MAGISKTMP`
+  only — the busybox applet directory is no longer added. HPC scripts
+  therefore resolve utilities from the system toybox. Consequences
+  handled in v1.11:
+  - `pkill` does not exist in Android toybox; the old `pkill -f` lines
+    in webui.sh/uninstall.sh were silent no-ops on-device. Replaced by
+    a portable `/proc/*/cmdline` scanner (`web_kill_cmdline`).
+  - toybox `httpd` is an inetd-only static file server (no CGI, no
+    listener) — verified in the toybox source — so it is deliberately
+    NOT a WebUI fallback; the doctor reports the actual backend.
+- New detection surface (v1.11, all read-only unless stated):
+  - `magisk --version` / `--version-code` / `--path` (daemon-mediated)
+  - Zygisk: `ZYGISK_ENABLED` env (module scripts) or magisk.db
+    `settings` key
+  - DenyList: `magisk --denylist status|ls|add|rm` — add/remove go
+    through the official CLI (Magisk owns the DB); package names are
+    validated against a strict regex first
+  - module inventory from `/data/adb/modules/*/module.prop`
+  - self-update: `magisk --install-module <zip>`, only for zips under
+    `/data/local/tmp` whose embedded `module.prop` declares
+    `id=hamedis_performance_core`
+- App-level v31.1 change to know: superuser grants are no longer
+  reactive — `adb shell su` (or any non-granted user) needs a pre-grant
+  in the Magisk app's Superuser tab. If `su` suddenly "fails" after a
+  Magisk update, that is the app, not HPC.
 
 ## Honest limitations / remaining work
 

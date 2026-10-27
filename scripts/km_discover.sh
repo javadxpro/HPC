@@ -468,6 +468,9 @@ km_caps_scan() {
     _km_reg_count=0
 
     km_disc_env
+    # Magisk environment (version/zygisk/denylist/backend); no-op under
+    # other root environments or when magisk_sys.sh is not loaded.
+    km_magisk_scan 2>/dev/null
     km_disc_cpu
     km_disc_gpu
     km_disc_mem

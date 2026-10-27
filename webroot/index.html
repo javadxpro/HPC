@@ -194,6 +194,7 @@ main{padding-bottom:calc(24px + env(safe-area-inset-bottom))}
   <button onclick="tab(8)">تشخیص</button>
   <button onclick="tab(9)">دستیار</button>
   <button onclick="tab(10)">لاگ</button>
+  <button onclick="tab(11)">مجیسک</button>
 </nav>
 
 <main>
@@ -649,6 +650,38 @@ POLL_INTERVAL=30'
   </div>
 </div>
 
+<!-- ══════════ سیستم مجیسک ══════════ -->
+<div class="page" id="p11">
+  <div class="card">
+    <h2>محیط روت / مجیسک</h2>
+    <div id="mgInfo"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="hint" style="margin-top:8px">این تب محیط مجیسک جدید (v31 به بالا، هستهٔ Rust) را بررسی می‌کند: نسخه، Zygisk، DenyList و بک‌اند سرور وب. همهٔ داده‌ها خواندنی هستند؛ تغییر فقط از مسیر‌های رسمی مجیسک انجام می‌شود.</div>
+  </div>
+  <div class="card">
+    <h2>DenyList (پنهان‌کاری روت)</h2>
+    <div id="mgDeny"><div class="hint">در حال بارگذاری…</div></div>
+    <div class="row" style="margin-top:10px"><span class="k">پکیج</span>
+      <span class="v"><input id="mgPkg" type="text" placeholder="com.example.app" style="direction:ltr;text-align:left;background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px;font-size:11.5px;width:180px"></span></div>
+    <div class="btns" style="margin-top:8px">
+      <button onclick="mgDenyAdd()">افزودن به DenyList</button>
+      <button onclick="mgDenyRm()">حذف از DenyList</button>
+    </div>
+    <div class="hint" style="margin-top:8px">نام پکیج با الگوی سخت Android اعتبارسنجی می‌شود؛ افزودن/حذف از CLI رسمی <span style="direction:ltr">magisk --denylist</span> انجام می‌شود.</div>
+  </div>
+  <div class="card">
+    <h2>ماژول‌های نصب‌شده</h2>
+    <div id="mgMods"><div class="hint">در حال بارگذاری…</div></div>
+  </div>
+  <div class="card">
+    <h2>به‌روزرسانی خود ماژول</h2>
+    <div class="hint" style="margin-bottom:8px">فایل zip نسخهٔ جدید HPC را با <span style="direction:ltr;display:inline-block">adb push hpc_new.zip /data/local/tmp/hpc_new.zip</span> بفرستید، آدرسش را اینجا بنویسید و بزنید. فقط zipهایی که در <span style="direction:ltr">/data/local/tmp</span> باشند و <span style="direction:ltr">module.prop</span> آن‌ها id ماژول HPC را داشته باشد پذیرفته می‌شوند. بعد از نصب، ری‌بوت لازم است.</div>
+    <div class="row"><span class="k">مسیر zip</span>
+      <span class="v"><input id="mgZip" type="text" placeholder="/data/local/tmp/hpc_new.zip" style="direction:ltr;text-align:left;background:#0d131d;border:1px solid #1e2633;border-radius:8px;color:#cdd6e4;padding:6px;font-size:11.5px;width:220px"></span></div>
+    <div class="btns" style="margin-top:8px"><button class="w" onclick="mgUpdate()">نصب به‌روزرسانی</button></div>
+    <div id="mgUp" style="margin-top:8px"></div>
+  </div>
+</div>
+
 </main>
 <div id="toast"></div>
 
@@ -712,6 +745,7 @@ function tab(i){
   if(i===8) loadDiag();
   if(i===9) loadAdvise();
   if(i===10) loadLog();
+  if(i===11) loadMagisk();
 }
 
 // ───────── kernel platform (v1.10)
@@ -1194,6 +1228,87 @@ async function loadLog(){
   const d=await api('log');
   q('#logOut').textContent = d&&d.lines&&d.lines.length
     ? d.lines.join('\n') : 'لاگی موجود نیست';
+}
+
+// ───────── magisk system (v1.11)
+async function loadMagisk(){ loadMgInfo(); loadMgDeny(); loadMgMods(); }
+
+function mgRows(pairs){
+  let h='';
+  for(const [k,v] of pairs){
+    h+=`<div class="row"><span class="k">${k}</span><span class="v" style="direction:ltr;text-align:left">${v==null||v===''?'—':v}</span></div>`;
+  }
+  return h;
+}
+
+async function loadMgInfo(){
+  const d=await api('mgsk','&value=info');
+  const el=q('#mgInfo');
+  if(!d||!d.ok){ el.innerHTML='<div class="hint">دریافت نشد</div>'; return; }
+  if(!d.present){
+    el.innerHTML='<div class="hint">مجیسک روی این دستگاه شناسایی نشد (محیط روت متفاوت). این تب غیرفعال است.</div>';
+    return;
+  }
+  const z=d.zygisk==null?'نامشخص':(d.zygisk?'روشن':'خاموش');
+  const dl=d.denylistEnforced==null?'نامشخص':(d.denylistEnforced?'فعال':'غیرفعال');
+  el.innerHTML=mgRows([
+    ['نسخهٔ مجیسک',`${d.version||'نامشخص'} (code ${d.versionCode??'—'})`],
+    ['مسیر tmpfs',d.tmpPath],
+    ['Zygisk',z],
+    ['DenyList',dl],
+    ['تعداد ماژول',d.modules],
+    ['بک‌اند HTTPD',d.httpdBackend],
+    ['WebUI',d.webuiRunning?'در حال اجرا':'خاموش']
+  ]);
+}
+
+async function loadMgDeny(){
+  const d=await api('mgsk','&value=denylist');
+  const el=q('#mgDeny');
+  if(!d||!d.ok){ el.innerHTML='<div class="hint">دریافت نشد</div>'; return; }
+  const st=d.enforced==null?'نامشخص':(d.enforced?'فعال':'غیرفعال');
+  let h=`<div class="row"><span class="k">وضعیت</span><span class="v">${st}</span></div>`;
+  if(d.entries&&d.entries.length){
+    h+='<table style="width:100%;font-size:11.5px;margin-top:8px"><tr><th style="text-align:left">پکیج</th><th style="text-align:left">فرآیند</th></tr>';
+    for(const e of d.entries) h+=`<tr><td style="direction:ltr;text-align:left">${e.pkg}</td><td style="direction:ltr;text-align:left">${e.proc||'—'}</td></tr>`;
+    h+='</table>';
+  } else h+='<div class="hint" style="margin-top:8px">خالی است</div>';
+  el.innerHTML=h;
+}
+
+async function loadMgMods(){
+  const d=await api('mgsk','&value=modules');
+  const el=q('#mgMods');
+  if(!d||!d.ok){ el.innerHTML='<div class="hint">دریافت نشد</div>'; return; }
+  let h='<table style="width:100%;font-size:11.5px"><tr><th style="text-align:left">id</th><th style="text-align:left">نام</th><th style="text-align:left">نسخه</th></tr>';
+  for(const m of (d.modules||[])) h+=`<tr><td style="direction:ltr;text-align:left">${m.id}</td><td style="direction:ltr;text-align:left">${m.name}</td><td style="direction:ltr;text-align:left">${m.version}</td></tr>`;
+  el.innerHTML=h+'</table>';
+}
+
+async function mgDenyAdd(){
+  const p=q('#mgPkg').value.trim();
+  if(!p){ toast('نام پکیج را بنویسید','err'); return; }
+  const d=await api('mgsk','&value=denyadd&pkg='+encodeURIComponent(p));
+  if(d&&d.ok){ toast(d.note||'افزوده شد','ok'); loadMgDeny(); }
+  else toast((d&&d.error)||'ناموفق','err');
+}
+
+async function mgDenyRm(){
+  const p=q('#mgPkg').value.trim();
+  if(!p){ toast('نام پکیج را بنویسید','err'); return; }
+  const d=await api('mgsk','&value=denyrmm&pkg='+encodeURIComponent(p));
+  if(d&&d.ok){ toast(d.note||'حذف شد','ok'); loadMgDeny(); }
+  else toast((d&&d.error)||'ناموفق','err');
+}
+
+async function mgUpdate(){
+  const z=q('#mgZip').value.trim();
+  if(!z){ toast('مسیر zip را بنویسید','err'); return; }
+  if(!confirm('نسخهٔ جدید نصب می‌شود و برای اعمال باید ری‌بوت کنید. مطمئنی؟')) return;
+  q('#mgUp').innerHTML='<div class="hint">در حال نصب…</div>';
+  const d=await api('mgsk','&value=update&zip='+encodeURIComponent(z));
+  if(d&&d.ok){ q('#mgUp').innerHTML=`<div class="ok-box">${d.note||'نصب شد'}</div>`; toast('به‌روزرسانی نصب شد — ری‌بوت کن','ok'); }
+  else { q('#mgUp').innerHTML=`<div class="err-box">${(d&&d.error)||'ناموفق'}</div>`; toast('نصب ناموفق بود','err'); }
 }
 
 async function act(c){
