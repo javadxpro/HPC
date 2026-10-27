@@ -63,4 +63,12 @@ check "report file created" "$([ -f "$(printf '%s' "$r" | sed -n 's/.*"path":"\(
 check "redacted export created" "$([ -f "$(printf '%s' "$r" | sed -n 's/.*"export":"\([^"]*\)".*/\1/p')" ] && echo 0 || echo 1)"
 check "report has capability section" "$(grep -q 'capability summary' "$(printf '%s' "$r" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')" && echo 0 || echo 1)"
 
+echo "== doctor =="
+r=$(km_doctor 2>/dev/null)
+check "doctor emits result line" "$(printf '%s\n' "$r" | grep -qE '^DOCTOR RESULT: (PASS|DEGRADED|FAIL)' && echo 0 || echo 1)"
+check "doctor not FAIL under fake" "$(printf '%s\n' "$r" | grep -q '^DOCTOR RESULT: FAIL' && echo 1 || echo 0)"
+check "doctor reports registry" "$(printf '%s\n' "$r" | grep -q 'PASS  registry' && echo 0 || echo 1)"
+check "doctor reports writetest" "$(printf '%s\n' "$r" | grep -qE '(PASS|WARN|FAIL)  writetest' && echo 0 || echo 1)"
+check "doctor monitors all-json" "$(printf '%s\n' "$r" | grep -q 'PASS  monitors' && echo 0 || echo 1)"
+
 test_result "test_bench_diag"

@@ -400,8 +400,9 @@ case "$CMD" in
                 ;;
             advise)   [ "${3:-}" = "explain" ] && km_advise_explain "${4:-}" || km_advise ;;
             report)   km_diag_report ;;
+            doctor)   km_doctor ;;
             *)
-                printf 'usage: hpc.sh km [status|cpu|gpu|mem|thermal|battery|net|disk|sched|procs|modules|klog|caps|events|health|history|rollback|set|get|prof|bench|advise|report]\n'
+                printf 'usage: hpc.sh km [status|cpu|gpu|mem|thermal|battery|net|disk|sched|procs|modules|klog|caps|events|health|history|rollback|set|get|prof|bench|advise|report|doctor]\n'
                 ;;
         esac
         ;;

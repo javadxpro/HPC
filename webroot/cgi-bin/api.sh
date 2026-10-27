@@ -686,6 +686,10 @@ api_kmreport() {
         run)
             km_diag_report
             ;;
+        doctor)
+            printf '{"ok":1,"report":%s}\n' \
+                "$(jstr "$(km_doctor 2>/dev/null | awk '{printf "%s%s", (NR>1 ? " | " : ""), $0}')")"
+            ;;
         file:*)
             _krf="${_krr#file:}"
             case "$_krf" in

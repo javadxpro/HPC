@@ -210,3 +210,120 @@ km_diag_report() {
     printf '{"ok":1,"path":"%s","export":"%s"}\n' "$_d_out" "$_d_exp"
     return 0
 }
+
+# ----------------------------------------------------------------------
+# km_doctor — on-device self-check
+#
+# Read-only, EXCEPT one guarded no-op write round-trip: the current
+# value of a single writable capability is written back to itself and
+# read back, so the real write path (lock -> validate -> backup ->
+# write -> verify -> commit) is exercised without changing anything.
+#
+# Output: one line per check:  PASS|WARN|FAIL  <area>  <detail>
+# Final line:  DOCTOR RESULT: PASS|DEGRADED|FAIL (p=N w=M f=K)
+km_doctor() {
+    _dk_p=0; _dk_w=0; _dk_f=0
+
+    # -- capability registry ------------------------------------------------
+    if [ -f "$KM_REG_TSV" ]; then
+        # registry.tsv columns: id name path kind rw risk type conf value detail
+        # rw values: rw = writable, r = read-only, - = absent/inaccessible
+        _dk_total=$(wc -l <"$KM_REG_TSV" 2>/dev/null | tr -d ' ')
+        _dk_wrt=$(awk -F'\t' '$5=="rw"' "$KM_REG_TSV" 2>/dev/null | wc -l | tr -d ' ')
+        _dk_ro=$(awk -F'\t' '$5=="r"' "$KM_REG_TSV" 2>/dev/null | wc -l | tr -d ' ')
+        _dk_ab=$(awk -F'\t' '$5=="-"' "$KM_REG_TSV" 2>/dev/null | wc -l | tr -d ' ')
+        if [ "${_dk_total:-0}" -gt 0 ]; then
+            _dk_p=$((_dk_p + 1))
+            printf 'PASS  registry  %s capabilities (%s writable, %s read-only, %s absent/inaccessible)\n' \
+                "$_dk_total" "$_dk_wrt" "$_dk_ro" "$_dk_ab"
+        else
+            _dk_f=$((_dk_f + 1)); printf 'FAIL  registry  empty - run: hpc.sh km scan\n'
+        fi
+        if [ "${_dk_wrt:-0}" -eq 0 ]; then
+            _dk_w=$((_dk_w + 1)); printf 'WARN  registry  no writable capability found (kernel exposes read-only only?)\n'
+        fi
+    else
+        _dk_f=$((_dk_f + 1)); printf 'FAIL  registry  missing - run: hpc.sh km scan\n'
+    fi
+
+    # -- plugin adapters -----------------------------------------------------
+    if [ -f "$KM_PLUGIN_CAPS" ]; then
+        _dk_pl=$(wc -l <"$KM_PLUGIN_CAPS" 2>/dev/null | tr -d ' ')
+        if [ "${_dk_pl:-0}" -gt 0 ]; then
+            _dk_p=$((_dk_p + 1)); printf 'PASS  plugins  %s plugin capability(ies) registered\n' "$_dk_pl"
+        else
+            _dk_w=$((_dk_w + 1)); printf 'WARN  plugins  adapter loaded but registered no capabilities\n'
+        fi
+    else
+        _dk_w=$((_dk_w + 1)); printf 'WARN  plugins  no adapter registered (core discovery only)\n'
+    fi
+
+    # -- monitor JSON endpoints ---------------------------------------------
+    _dk_m_ok=0; _dk_m_n=0
+    for _dk_m in km_mon_status km_mon_cpu km_mon_gpu km_mon_mem km_mon_thermal \
+                 km_mon_batt km_mon_net km_mon_disk km_mon_sched km_mon_procs \
+                 km_mon_modules km_mon_klog km_health km_caps_json; do
+        _dk_m_n=$((_dk_m_n + 1))
+        _dk_m_h=$($_dk_m 2>/dev/null | head -c 1)
+        if [ "$_dk_m_h" = "{" ]; then
+            _dk_m_ok=$((_dk_m_ok + 1))
+        else
+            _dk_f=$((_dk_f + 1)); printf 'FAIL  monitor  %s did not emit JSON\n' "$_dk_m"
+        fi
+    done
+    if [ "$_dk_m_ok" -eq "$_dk_m_n" ]; then
+        _dk_p=$((_dk_p + 1)); printf 'PASS  monitors  %s/%s endpoints emit JSON\n' "$_dk_m_ok" "$_dk_m_n"
+    fi
+
+    # -- audit trail ----------------------------------------------------------
+    if [ -f "$KM_EVENTS" ]; then
+        _dk_p=$((_dk_p + 1)); printf 'PASS  events  audit log present (%s lines)\n' "$(wc -l <"$KM_EVENTS" 2>/dev/null | tr -d ' ')"
+    else
+        _dk_w=$((_dk_w + 1)); printf 'WARN  events  audit log not created yet\n'
+    fi
+    if [ -f "$KM_CHANGE_LOG" ]; then
+        _dk_p=$((_dk_p + 1)); printf 'PASS  history  change log present (%s changes)\n' "$(wc -l <"$KM_CHANGE_LOG" 2>/dev/null | tr -d ' ')"
+    else
+        _dk_w=$((_dk_w + 1)); printf 'WARN  history  no changes recorded yet\n'
+    fi
+
+    # -- guarded no-op write round-trip ----------------------------------------
+    if [ -f "$KM_REG_TSV" ]; then
+        _dk_rt=$(awk -F'\t' '$5=="rw" && $1 ~ /governor$/ {print $1; exit}' "$KM_REG_TSV" 2>/dev/null)
+        [ -n "$_dk_rt" ] || _dk_rt=$(awk -F'\t' '$5=="rw" && $7=="enum" {print $1; exit}' "$KM_REG_TSV" 2>/dev/null)
+        [ -n "$_dk_rt" ] || _dk_rt=$(awk -F'\t' '$5=="rw" {print $1; exit}' "$KM_REG_TSV" 2>/dev/null)
+    fi
+    if [ -n "${_dk_rt:-}" ]; then
+        _dk_orig=$(km_ctl_get "$_dk_rt" 2>/dev/null)
+        if [ -n "$_dk_orig" ]; then
+            _dk_rr=$(km_ctl_set "$_dk_rt" "$_dk_orig" doctor 2>/dev/null)
+            _dk_now=$(km_ctl_get "$_dk_rt" 2>/dev/null)
+            if printf '%s' "$_dk_rr" | grep -q '"ok":1' && [ "$_dk_now" = "$_dk_orig" ]; then
+                _dk_p=$((_dk_p + 1)); printf 'PASS  writetest  no-op write+readback ok on %s (value unchanged: %s)\n' "$_dk_rt" "$_dk_orig"
+            else
+                _dk_f=$((_dk_f + 1)); printf 'FAIL  writetest  no-op write on %s did not round-trip (check kernel support; no change left behind)\n' "$_dk_rt"
+            fi
+        else
+            _dk_w=$((_dk_w + 1)); printf 'WARN  writetest  %s is writable but unreadable; skipped\n' "$_dk_rt"
+        fi
+    else
+        _dk_w=$((_dk_w + 1)); printf 'WARN  writetest  no writable capability to test\n'
+    fi
+
+    # -- web surface ------------------------------------------------------------
+    if [ -f "$HPC_MODDIR/webroot/index.html" ] && [ -f "$HPC_MODDIR/webroot/cgi-bin/api.sh" ]; then
+        _dk_p=$((_dk_p + 1)); printf 'PASS  web  WebUI assets present\n'
+    else
+        _dk_f=$((_dk_f + 1)); printf 'FAIL  web  WebUI assets missing\n'
+    fi
+
+    # -- summary ------------------------------------------------------------------
+    if [ "$_dk_f" -eq 0 ] && [ "$_dk_w" -eq 0 ]; then
+        printf 'DOCTOR RESULT: PASS (p=%s w=%s f=%s)\n' "$_dk_p" "$_dk_w" "$_dk_f"
+    elif [ "$_dk_f" -eq 0 ]; then
+        printf 'DOCTOR RESULT: DEGRADED (p=%s w=%s f=%s)\n' "$_dk_p" "$_dk_w" "$_dk_f"
+    else
+        printf 'DOCTOR RESULT: FAIL (p=%s w=%s f=%s)\n' "$_dk_p" "$_dk_w" "$_dk_f"
+    fi
+    return 0
+}

@@ -602,6 +602,12 @@ POLL_INTERVAL=30'
     <div id="dgAb" style="margin-top:8px"></div>
   </div>
   <div class="card">
+    <h2>خودآزمایی (Doctor)</h2>
+    <div class="hint" style="margin-bottom:8px">بازبینی کامل پلتفرم روی همین دستگاه: رگستری قابلیت‌ها، خروجی JSON مانیتورها، ثبت رویدادها، وب + یک تست نوشتِ بدون‌تغییر (no-op) روی یک قابلیت نوشتنی. اگر خروجی را برای گزارش‌دهی بفرستید، همین متن کافی است.</div>
+    <div class="btns"><button class="w" onclick="kmDoctor()">اجرای خودآزمایی</button></div>
+    <pre id="dgDoctor" style="direction:ltr;text-align:left;font-size:11px;line-height:1.55;background:#0d131d;border:1px solid #1e2633;border-radius:8px;padding:9px;margin-top:9px;white-space:pre-wrap;min-height:18px"></pre>
+  </div>
+  <div class="card">
     <h2>سازگاری دستگاه و ابزار توسعه</h2>
     <div id="dgCaps"><div class="hint">در حال بارگذاری…</div></div>
     <div class="btns" style="margin-top:9px">
@@ -1073,6 +1079,18 @@ async function kmReport(){
   if(d&&d.ok){
     q('#dgReport').innerHTML=`<div class="ok-box">گزارش ساخت شد:<br><small style="direction:ltr;display:block">${d.path}</small><small style="direction:ltr;display:block">نسخهٔ Redacted: ${d.export}</small><br>برای بردن آن: adb pull "${d.export}"</div>`;
   } else toast((d&&d.error)||'خطا در ساخت گزارش','err');
+}
+
+async function kmDoctor(){
+  const el=q('#dgDoctor');
+  el.textContent='در حال اجرا… (~۱۰ ثانیه)';
+  const d=await api('kmreport','&value=doctor');
+  if(d&&d.ok&&d.report){
+    el.textContent=d.report;
+    if(/^DOCTOR RESULT: PASS /m.test(d.report)) toast('خودآزمایی: همه‌چیز درست است','ok');
+    else if(/^DOCTOR RESULT: DEGRADED /m.test(d.report)) toast('خودآزمایی: با هشدار (برای جزئیات به نتیجه دقت کنید)','');
+    else toast('خودآزمایی: خطا یافت شد — متن کامل را برای پشتیبانی بفرستید','err');
+  } else { el.textContent='خطا: '+((d&&d.error)||'پاسخ دریافت نشد'); }
 }
 
 // ───────── assistant

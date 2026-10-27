@@ -52,6 +52,11 @@ r=$(km_prof_import test6 'CPU_MAX_PERCENT=$(reboot)')
 check "dollar-value rejected" "$(printf '%s' "$r" | grep -q 'prohibited characters' && echo 0 || echo 1)"
 check "rejected import created no file" "$([ ! -f "$KM_PROF_USER/test6.conf" ] && echo 0 || echo 1)"
 
+echo "== import: rejection JSON stays valid with special chars =="
+r=$(km_prof_import test7 'BAD LINE "quoted" stuff')
+check_json "import rejection json (quotes in line)" "$r"
+check "special-char line rejected" "$(printf '%s' "$r" | grep -q 'not KEY=VALUE' && echo 0 || echo 1)"
+
 echo "== duplicate / delete =="
 r=$(km_prof_duplicate testprof copyprof)
 check "duplicate ok" "$(printf '%s' "$r" | grep -q '"ok":1' && echo 0 || echo 1)"

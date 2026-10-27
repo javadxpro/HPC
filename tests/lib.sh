@@ -13,8 +13,11 @@ export HPC_STATE="$T/data/state"
 export HPC_MODDIR="$T/mod"
 HPC_SCRIPTS="$MOD/scripts"
 
-mkdir -p "$HPC_STATE" "$T/data/logs" "$T/mod/config/profiles" "$T/mod/plugins"
+mkdir -p "$HPC_STATE" "$T/data/logs" "$T/mod/config/profiles" "$T/mod/plugins" "$T/mod/webroot/cgi-bin"
 chmod 0700 "$HPC_DATA" 2>/dev/null
+# minimal WebUI assets so read-only integrity checks (km_doctor) can run
+: >"$T/mod/webroot/index.html" 2>/dev/null
+: >"$T/mod/webroot/cgi-bin/api.sh" 2>/dev/null
 
 # ---------------------------------------------------------------- stubs
 # Android-only commands / environment

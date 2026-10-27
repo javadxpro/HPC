@@ -247,7 +247,7 @@ km_prof_import() {
     done
     _pi_err=$(head -n 1 "$_pi_tmpf" 2>/dev/null)
     rm -f "$_pi_tmpf" 2>/dev/null
-    [ -n "$_pi_err" ] && { printf '{"ok":0,"error":"import rejected: %s"}\n' "$(km_jesc "$_pi_err")"; return 1; }
+    [ -n "$_pi_err" ] && { printf '{"ok":0,"error":%s}\n' "$(km_jesc "import rejected: $_pi_err")"; return 1; }
 
     # governor preference sanity: at least one recognizable governor word
     _pi_gpref=$(printf '%s\n' "$_pi_content" | awk -F= '/^CPU_GOVERNOR_PREF=/ {print $2; exit}' 2>/dev/null)

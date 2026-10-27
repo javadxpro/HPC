@@ -74,13 +74,21 @@ New subsystems (all behind the existing `safe_write` backup/verify layer):
 
 ## Verify on device
 
-- `hpc.sh km ls` — capability table with states
-  (`writable` / `read_only` / `absent` / `inaccessible`).
-- WebUI: Kernel tab shows live status + health.
-- `hpc.sh km set cpu0.governor performance` then
-  `hpc.sh km rollback` — write + revert through the transaction layer.
-- `hpc.sh km diagnose` + `hpc.sh km report` — redacted report in
-  `/data/local/tmp/hpc_exports`.
+1. **First:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh km doctor`
+   (or the "خودآزمایی" button on the WebUI Diagnostics tab).
+   It re-checks the capability registry, all 14 monitor JSON
+   endpoints, the audit trail, WebUI assets, and performs one guarded
+   no-op write+readback on a writable capability — without changing
+   anything. If anything is off, the text of this output is all we
+   need to help.
+2. `hpc.sh km ls` — capability table with states
+   (`writable` / `read_only` / `absent` / `inaccessible`).
+3. WebUI: Kernel tab shows live status + health.
+4. `hpc.sh km set cpu0.governor performance` then
+   `hpc.sh km rollback` — write + revert through the transaction layer.
+5. `hpc.sh km report` — redacted diagnostic report in
+   `/data/local/tmp/hpc_exports` (the WebUI Diagnostics tab shows the
+   same data live).
 
 ## Known limitations (honest)
 

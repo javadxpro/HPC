@@ -76,6 +76,11 @@ echo "== kmreport: bad export name rejected =="
 r=$(call_api2 "action=kmreport&value=file:../../etc/passwd")
 check "export traversal rejected" "$(printf '%s' "$r" | grep -q 'bad export name' && echo 0 || echo 1)"
 
+echo "== kmreport doctor =="
+r=$(call_api2 "action=kmreport&value=doctor")
+check_json "kmreport doctor json" "$r"
+check "doctor via api has report" "$(printf '%s' "$r" | grep -q 'DOCTOR RESULT:' && echo 0 || echo 1)"
+
 echo "== backward compat: old endpoints still work =="
 r=$(call_api2 "action=ping")
 check "ping works" "$(printf '%s' "$r" | grep -q 'ok' && echo 0 || echo 1)"

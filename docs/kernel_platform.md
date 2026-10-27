@@ -75,8 +75,14 @@ kmrollback&value=N|all
 kmprof&value=list|show:N|compare:A,B|export:N|duplicate:S,D|delete:N|import&name=<n>&b64=<b64>
 kmbench&value=list|run:NAME|ab:NAME:PA:PB
 kmadvise&value=full|explain:ID
-kmreport&value=run|file:NAME        (NAME must match report_[0-9]*_redacted.txt)
+kmreport&value=run|file:NAME|doctor  (NAME must match report_[0-9]*_redacted.txt)
 ```
+
+`kmreport&value=doctor` runs the on-device self-check (`km_doctor`) and
+returns the multi-line report as a single string. The check is read-only
+except one guarded no-op write round-trip (a writable capability's current
+value is written back to itself and read back), so it exercises the real
+write path without changing anything.
 
 All handlers run inside the existing loopback-only CGI server;
 profile names are restricted to `[a-z0-9_]` (no traversal), base64
@@ -89,12 +95,19 @@ hpc.sh km [status|cpu|gpu|mem|thermal|battery|net|disk|sched|procs|
              modules|klog|caps|events|health|history|
              rollback [N|all]|set <id> <value>|get <id>|
              prof <list|show N|compare A B|export N>|
-             bench <list|run NAME>|advise|report]
+             bench <list|run NAME>|advise|report|doctor]
 ```
+
+`hpc.sh km doctor` prints one line per check
+(`PASS|WARN|FAIL  <area> <detail>`) and a final
+`DOCTOR RESULT: PASS|DEGRADED|FAIL (p w f)` line — the same text the
+WebUI Diagnostics tab shows. It is the recommended first thing to run on
+a device after installing or updating, and the text to send back when
+reporting a problem.
 
 ## Testing
 
-`sh tests/run_tests.sh` runs seven suites (159 checks) against a
+`sh tests/run_tests.sh` runs seven suites (169 checks) against a
 fake sysfs tree in `mktemp` — **no root, no device needed**:
 
 - discovery (full tree, missing interfaces, read-only detection,
