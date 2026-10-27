@@ -525,27 +525,37 @@ km_caps_scan() {
 
 # km_caps_json - emit the full capability registry as JSON.
 # Fields per control: id name path kind rw risk type conf value detail
+# Performance note: the old version forked km_jesc (a sed+tr pipeline)
+# 10x per row - ~2000 process spawns per scan on a real device, which
+# made every capability scan take seconds and, via the WebUI poll
+# cadence, made the UI feel slow. Now the whole TSV is escaped in ONE
+# tr + ONE sed pass; the row loop is pure printf (no forks).
 km_caps_json() {
     _kj_ts=$(km_now_ms)
-    _kj_kernel=$(uname -r 2>/dev/null)
-    _kj_arch=$(uname -m 2>/dev/null)
+    _kj_kernel=$(km_jesc "$(uname -r 2>/dev/null)")
+    _kj_arch=$(km_jesc "$(uname -m 2>/dev/null)")
     _kj_root=$( [ -d /data/adb/magisk ] && printf 'magisk' || \
                 [ -d /data/adb/kernelsu ] && printf 'kernelsu' || \
                 [ -f /data/adb/ap ] && printf 'apatch' || printf 'none' )
     printf '{"ts":%s,"count":%s,"kernel":%s,"arch":%s,"root_env":%s,"controls":[' \
-        "$_kj_ts" "$_km_reg_count" "$(km_jesc "$_kj_kernel")" "$(km_jesc "$_kj_arch")" "$(km_jesc "$_kj_root")"
+        "$_kj_ts" "$_km_reg_count" "$_kj_kernel" "$_kj_arch" "$(km_jesc "$_kj_root")"
 
     _first=1
     if [ -f "$KM_REG_TSV" ]; then
+        # strip control chars (keep \t and \n: field/line separators),
+        # then escape backslashes and quotes for JSON - one pipeline.
+        _kj_esc="${KM_REG_TSV}.jesc"
+        tr -d '\000\001-\010\013-\037\177' <"$KM_REG_TSV" 2>/dev/null | \
+            sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' >"$_kj_esc" 2>/dev/null
         while IFS="$(printf '\t')" read -r c_id c_name c_path c_kind c_rw c_risk c_type c_conf c_val c_det; do
             [ -n "$c_id" ] || continue
             [ "$_first" = "1" ] || printf ','
             _first=0
-            printf '{"id":%s,"name":%s,"path":%s,"kind":%s,"rw":%s,"risk":%s,"type":%s,"conf":%s,"value":%s,"detail":%s}' \
-                "$(km_jesc "$c_id")" "$(km_jesc "$c_name")" "$(km_jesc "$c_path")" \
-                "$(km_jesc "$c_kind")" "$(km_jesc "$c_rw")" "$(km_jesc "$c_risk")" \
-                "$(km_jesc "$c_type")" "$c_conf" "$(km_jesc "$c_val")" "$(km_jesc "$c_det")"
-        done <"$KM_REG_TSV"
+            printf '{"id":"%s","name":"%s","path":"%s","kind":"%s","rw":"%s","risk":"%s","type":"%s","conf":%s,"value":"%s","detail":"%s"}' \
+                "$c_id" "$c_name" "$c_path" "$c_kind" "$c_rw" "$c_risk" "$c_type" \
+                "${c_conf:-null}" "$c_val" "$c_det"
+        done <"$_kj_esc"
+        rm -f "$_kj_esc" 2>/dev/null
     fi
     printf ']}\n'
 }

@@ -100,11 +100,16 @@ while true; do
     km_event_tick 2>/dev/null
     hpc_tick_plugins 2>/dev/null
 
-    # --- capability re-scan every ~10 ticks: detect interfaces that
-    # appeared/disappeared (kernel module load, ROM tuner, reboot)
-    if [ $(( _tick % 10 )) -eq 0 ]; then
-        km_caps_scan 2>/dev/null
-    fi
+    # --- capability re-scan: keep the registry younger than
+    # HPC_REG_TTL (defined in common.sh). Age-based, not tick-based:
+    # the WebUI treats the registry as fresh up to HPC_REG_TTL, so
+    # refreshing at TTL-60 means a live CGI request almost never has
+    # to run a full scan itself (which is what made the UI feel slow
+    # when the two cadences disagreed).
+    _kb_reg="$HPC_STATE/caps2/registry.tsv"
+    _kb_age=$(( $(date +%s) - $(stat -c %Y "$_kb_reg" 2>/dev/null || printf '0') ))
+    [ "$_kb_age" -lt 0 ] && _kb_age=99999
+    [ "$_kb_age" -ge $(( HPC_REG_TTL - 60 )) ] && km_caps_scan 2>/dev/null
 
     # --- periodic heartbeat, deliberately infrequent
     if [ $(( _tick % 20 )) -eq 0 ]; then

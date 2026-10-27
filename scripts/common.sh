@@ -14,6 +14,11 @@ HPC_DATA="${HPC_DATA:-/data/adb/hamedis}"
 HPC_STATE="$HPC_DATA/state"
 HPC_LOG_DIR="$HPC_DATA/logs"
 HPC_CONFIG="$HPC_DATA/config.conf"
+# Freshness window (seconds) for the capability registry, shared by the
+# service loop (which refreshes at TTL-60) and the WebUI CGI (which
+# falls back to a full scan only past TTL). Must stay in sync - see
+# hpc_bootstrap() and service.sh.
+HPC_REG_TTL="${HPC_REG_TTL:-300}"
 HPC_SCRIPTS="$HPC_MODDIR/scripts"
 
 # Create the persistent data tree. Everything HPC writes lives here,
@@ -183,10 +188,16 @@ hpc_bootstrap() {
     load_capabilities
     # Kernel Management Platform: load plugins, then build the
     # capability registry (discovery + change detection).
-    hpc_load_plugins
-    # The service loop keeps the registry current; a CGI request only
-    # needs to scan when the registry is missing or older than 60 s.
-    # (HPC_KM_SCAN_FORCE=1 always scans - used by the test harness.)
+    # The registry is STRUCTURAL data (which sysfs paths exist, rw
+    # permission, risk) - it only changes on reboot, kernel-module
+    # load or ROM updates, so a few minutes of age is harmless.
+    # The CGI only scans when the registry is older than HPC_REG_TTL;
+    # the service (POLL_INTERVAL cadence) refreshes it at TTL-60, so a
+    # live WebUI poll essentially never pays the scan cost. (Before
+    # this was aligned, the service scanned every 10 ticks (~7 min)
+    # while the CGI went stale after 60 s - so for ~6 min out of every
+    # 7, every 3 s WebUI poll ran a full capability scan and the UI
+    # felt slow.)
     if [ "${HPC_KM_SCAN_FORCE:-0}" = "1" ]; then
         km_caps_scan
     else
@@ -194,7 +205,7 @@ hpc_bootstrap() {
         _hb_fresh=0
         if [ -f "$_hb_reg" ]; then
             _hb_age=$(( $(date +%s) - $(stat -c %Y "$_hb_reg" 2>/dev/null || printf '0') ))
-            [ "$_hb_age" -ge 0 ] && [ "$_hb_age" -lt 60 ] && _hb_fresh=1
+            [ "$_hb_age" -ge 0 ] && [ "$_hb_age" -lt "${HPC_REG_TTL:-300}" ] && _hb_fresh=1
         fi
         [ "$_hb_fresh" = "1" ] || km_caps_scan
     fi

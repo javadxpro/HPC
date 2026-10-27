@@ -88,4 +88,29 @@ r=$(km_ctl_set cpu1.governor performance cli)
 check "locked -> busy" "$(printf '%s' "$r" | grep -q busy && echo 0 || echo 1)"
 rmdir "$KM_LOCK_DIR" 2>/dev/null
 
+echo "== registry freshness window (HPC_REG_TTL) =="
+# The WebUI CGI must NOT re-scan a registry younger than HPC_REG_TTL
+# (a full scan on every 3s poll is what made the UI feel slow), and
+# must re-scan one older than it. (hpc_bootstrap lives in common.sh,
+# which this suite does not otherwise load.)
+# shellcheck source=/dev/null
+. "$HPC_SCRIPTS/common.sh"
+export HPC_REG_TTL=300
+_KT_REG="$HPC_STATE/caps2/registry.tsv"
+touch -d "@$(( $(date +%s) - 290 ))" "$_KT_REG"
+_kt_m0=$(stat -c %Y "$_KT_REG" 2>/dev/null)
+hpc_bootstrap >/dev/null 2>&1
+_kt_m1=$(stat -c %Y "$_KT_REG" 2>/dev/null)
+check "fresh registry not rescanned" "$([ "$_kt_m0" = "$_kt_m1" ] && echo 0 || echo 1)"
+touch -d "@$(( $(date +%s) - 310 ))" "$_KT_REG"
+hpc_bootstrap >/dev/null 2>&1
+_kt_now=$(date +%s)
+_kt_m2=$(stat -c %Y "$_KT_REG" 2>/dev/null)
+check "stale registry rescanned" "$([ $(( _kt_now - _kt_m2 )) -lt 30 ] && echo 0 || echo 1)"
+# km_caps_json must be fork-free per row: validate output + shape
+r=$(km_caps_json)
+check_json "caps json valid" "$r"
+check "caps json has id/name/path keys" "$(printf '%s' "$r" | grep -q '"id":"env.kernel"' && echo 0 || echo 1)"
+check "caps json empty conf -> null" "$(printf '%s' "$r" | grep -q '"conf":null\|"conf":[0-9]' && echo 0 || echo 1)"
+
 test_result "test_registry"
