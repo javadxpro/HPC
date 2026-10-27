@@ -5,7 +5,7 @@ Magisk module for Android.
 Auto-detects CPU/GPU/thermal/battery interfaces, never disables thermal
 protection, never pins clocks, fully reversible.
 
-- **Version:** v1.11.0 (versionCode 11100)
+- **Version:** v1.11.1 (versionCode 11101)
 - **WebUI:** `http://127.0.0.1:1111` — loopback only, started by the
   Magisk **Action** button (`action.sh`) or at boot (`WEBUI_AUTOSTART=1`)
 - **CLI:** `sh /data/adb/modules/hamedis_performance_core/hpc.sh [command]`

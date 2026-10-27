@@ -81,6 +81,36 @@ r=$(call_api2 "action=kmreport&value=doctor")
 check_json "kmreport doctor json" "$r"
 check "doctor via api has report" "$(printf '%s' "$r" | grep -q 'DOCTOR RESULT:' && echo 0 || echo 1)"
 
+echo "== config guard (a broken config cannot kill the API) =="
+# shellcheck source=/dev/null
+. "$HPC_SCRIPTS/common.sh"
+# 1) valid config passes
+printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+check "valid config ok" "$( [ "$(hpc_config_check)" = "ok" ] && echo 0 || echo 1 )"
+# 2) syntax error is caught with a line number
+printf '# header\nMODE=cool\nbroken ( line\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+chk=$(hpc_config_check)
+check "syntax error flagged" "$([ "$chk" != "ok" ] && echo 0 || echo 1)"
+check "syntax error has line number" "$(printf '%s' "$chk" | grep -qE '[0-9]+:' && echo 0 || echo 1)"
+# 3) stray word (valid syntax, executed at source time) is caught
+printf 'MODE=cool\ncool\n' >"$HPC_CONFIG"
+chk=$(hpc_config_check)
+check "stray word flagged" "$([ "$chk" != "ok" ] && echo 0 || echo 1)"
+check "stray word says not found" "$(printf '%s' "$chk" | grep -q 'not found' && echo 0 || echo 1)"
+# 4) hpc_load_config degrades to defaults instead of dying
+hpc_load_config
+check "load survives broken config" "$( [ "$POLL_INTERVAL" = "45" ] && echo 0 || echo 1 )"
+check "load fell back to default MODE" "$( [ "$MODE" = "balanced" ] && echo 0 || echo 1 )"
+# 5) a repaired/clean config passes again
+printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+check "clean config ok again" "$( [ "$(hpc_config_check)" = "ok" ] && echo 0 || echo 1 )"
+# 6) with a broken config the API still answers (degraded defaults)
+printf 'MODE=cool\ncool\n' >"$HPC_CONFIG"
+r=$(call_api2 "action=ping")
+check_json "api json despite broken config" "$r"
+check "api answers despite broken config" "$(printf '%s' "$r" | grep -q '"ok":true' && echo 0 || echo 1)"
+printf 'MODE=cool\nPOLL_INTERVAL=45\n' >"$HPC_CONFIG"
+
 echo "== backward compat: old endpoints still work =="
 r=$(call_api2 "action=ping")
 check "ping works" "$(printf '%s' "$r" | grep -q 'ok' && echo 0 || echo 1)"

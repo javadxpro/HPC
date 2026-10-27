@@ -466,6 +466,53 @@ case "$CMD" in
         esac
         ;;
 
+    config)
+        # config: report config.conf health (line numbers included)
+        if [ ! -f "$HPC_CONFIG" ]; then
+            printf 'config.conf is missing (will be seeded from the module defaults on next boot)\n'
+            break
+        fi
+        _cfg_lines=$(wc -l <"$HPC_CONFIG" 2>/dev/null | tr -d ' ')
+        _cfg_chk=$(hpc_config_check)
+        if [ "$_cfg_chk" = "ok" ]; then
+            printf 'config.conf: OK (%s lines, sourceable)\n' "${_cfg_lines:-?}"
+        else
+            printf 'config.conf: PROBLEM\n  %s\n' "$_cfg_chk"
+            # extract the line number from "sh: 104: ..." style output
+            _cfg_ln=$(printf '%s' "$_cfg_chk" | sed -n 's/.*: *\([0-9][0-9]*\):.*/\1/p')
+            if [ -n "$_cfg_ln" ]; then
+                _cfg_from=$(( _cfg_ln > 2 ? _cfg_ln - 2 : 1 ))
+                printf '\n  offending area (lines %s-%s):\n' "$_cfg_from" "$_cfg_ln"
+                sed -n "${_cfg_from},$(( _cfg_ln + 1 ))p" "$HPC_CONFIG" 2>/dev/null | \
+                    while IFS= read -r _cfg_l; do
+                        printf '    %s\n' "$_cfg_l"
+                    done
+                printf '\n  Fix: sh %s config-fix   (backs up the file, reseeds defaults)\n' "$0"
+                printf '  Or edit it and re-run: sh %s config\n' "$0"
+            fi
+        fi
+        ;;
+
+    config-fix)
+        # config-fix: back up the broken config and reseed the defaults.
+        # User profile copies (in $HPC_DATA/profiles) are untouched.
+        if [ -f "$HPC_CONFIG" ]; then
+            _cfg_bak="${HPC_CONFIG}.broken.$(date +%s 2>/dev/null || printf x)"
+            mv -f "$HPC_CONFIG" "$_cfg_bak" 2>/dev/null && \
+                printf 'broken config backed up to %s\n' "$_cfg_bak"
+        fi
+        if [ -f "$HPC_MODDIR/config/config.conf" ]; then
+            cp -f "$HPC_MODDIR/config/config.conf" "$HPC_CONFIG" 2>/dev/null
+            chmod 0600 "$HPC_CONFIG" 2>/dev/null
+            hpc_migrate_config 2>/dev/null
+            printf 'default config reseeded\n'
+        else
+            printf 'module default config not found at %s\n' "$HPC_MODDIR/config/config.conf"
+        fi
+        _cfg_chk2=$(hpc_config_check)
+        [ "$_cfg_chk2" = "ok" ] && printf 'config.conf: OK now\n' || printf 'config.conf: still broken: %s\n' "$_cfg_chk2"
+        ;;
+
     clean)
         _clean_mode="${2:-scan}"
         case "$_clean_mode" in
@@ -526,7 +573,7 @@ case "$CMD" in
 
     *)
         printf 'Unknown command: %s\n' "$CMD"
-        printf "Try: status | cool | balanced | performance | gaming90 | gaming120 | kernel | webui | game | stop-game | monitor | report | sessions | save | compare | stopmon | reload | reset | log | caps\n"
+        printf "Try: status | cool | balanced | performance | gaming90 | gaming120 | kernel | webui | game | stop-game | monitor | report | sessions | save | compare | stopmon | reload | reset | log | caps | config | config-fix | magisk | km doctor\n"
         exit 1
         ;;
 esac

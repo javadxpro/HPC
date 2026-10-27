@@ -101,9 +101,46 @@ hpc_migrate_config() {
     return 0
 }
 
+# hpc_config_check -> "ok" when the config is sourceable, otherwise the
+# shell's error line (ash includes the line number, e.g.
+# "sh: 104: syntax error: ..." or "sh: 104: cool: not found").
+# Two passes:
+#   1. sh -n  : catches syntax errors (unbalanced quotes, ...)
+#   2. source in a throwaway subshell: catches a stray word with no '='
+#      (e.g. a leftover "cool" on the last line), which is syntactically
+#      valid but gets EXECUTED when the config is sourced - the classic
+#      "line 104: not found" that kills the WebUI.
+hpc_config_check() {
+    [ -f "$HPC_CONFIG" ] || { printf 'missing'; return 0; }
+    _hcc_out=$(sh -n "$HPC_CONFIG" 2>&1)
+    if [ -n "$_hcc_out" ]; then
+        printf '%s\n' "$_hcc_out" | head -n 1
+        return 1
+    fi
+    _hcc_run=$(sh -c ". \"$HPC_CONFIG\"" 2>&1)
+    if [ -n "$_hcc_run" ]; then
+        printf '%s\n' "$_hcc_run" | head -n 1
+        return 1
+    fi
+    printf 'ok'
+    return 0
+}
+
 hpc_load_config() {
-    # shellcheck source=/dev/null
-    [ -f "$HPC_CONFIG" ] && . "$HPC_CONFIG"
+    # Syntax-check BEFORE sourcing: a broken config.conf must not be able
+    # to take the WebUI/API/service down. A corrupted line (CRLF from an
+    # editor, a half-removed key, ...) used to kill the shell that sourced
+    # it; now it degrades to the built-in defaults and is logged with the
+    # offending line number. `hpc.sh config` shows details,
+    # `hpc.sh config-fix` reseeds the file.
+    if [ -f "$HPC_CONFIG" ]; then
+        _hpc_cfg_err=$(hpc_config_check)
+        if [ "$_hpc_cfg_err" = "ok" ]; then
+            . "$HPC_CONFIG"
+        else
+            log_error "config.conf rejected, using built-in defaults: $_hpc_cfg_err"
+        fi
+    fi
     # Defaults for anything the user deleted from the file.
     MODE="${MODE:-balanced}"
     AUTO_GAME_MODE="${AUTO_GAME_MODE:-1}"

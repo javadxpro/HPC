@@ -48,10 +48,22 @@ fi
 
 # Sourcing happens in a guarded subshell first: if the config or any
 # library has a syntax error, the subshell dies but WE survive and can
-# report it, instead of the connection dropping.
+# report it, instead of the connection dropping. When the config is the
+# culprit, say so with the offending line (ash includes the number).
 if ! ( . "$MODDIR/scripts/common.sh" && hpc_bootstrap ) >/dev/null 2>&1; then
-    printf '{"error":"bootstrap failed - check config.conf for a syntax error (run: sh %s/hpc.sh status)"}' \
-        "$MODDIR"
+    _bs_cfg=$( ( . "$MODDIR/scripts/common.sh" 2>/dev/null && hpc_config_check ) 2>/dev/null )
+    case "$_bs_cfg" in
+        ok|missing)
+            _bs_hint="bootstrap failed - run: sh $MODDIR/hpc.sh doctor"
+            ;;
+        *)
+            _bs_hint="bootstrap failed - config.conf is broken: $_bs_cfg (fix: sh $MODDIR/hpc.sh config-fix)"
+            ;;
+    esac
+    # jstr is defined further down; escape inline (backslash, quote,
+    # control chars) so the hint can never break the JSON.
+    _bs_esc=$(printf '%s' "$_bs_hint" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr '\t' ' ' | tr -d '\000-\037\177')
+    printf '{"error":"%s"}\n' "$_bs_esc"
     exit 0
 fi
 
