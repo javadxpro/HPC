@@ -90,6 +90,36 @@ hpc_init_config() {
         done
         [ -n "$_ps_new" ] && printf '%b' "$_ps_new" >"$HPC_STATE/profiles_seed.txt" 2>/dev/null
     fi
+
+    # v1.11 -> v1.12 migration. The seed manifest above only exists from
+    # v1.12 on, so the seeded copies of the profiles that no longer ship
+    # (v1.11 built-ins: cool / silent / multitasking / standby) are
+    # invisible to it and would survive the update as ghost entries in
+    # the profile list. Compare against the exact sha1 of the v1.11
+    # built-in files (byte-identical across v1.11.0..v1.11.2):
+    #   match -> pristine seeded copy -> remove
+    #   no    -> user-modified copy   -> stash under state/ (user data
+    #            is never destroyed) so it leaves the listed set.
+    # Idempotent: on later boots the files are simply gone.
+    _m_ret="$HPC_STATE/retired_profiles_v11"
+    for _rp in cool silent multitasking standby; do
+        [ -f "$HPC_DATA/profiles/$_rp.conf" ] || continue
+        _rp_ph=$(sha1sum "$HPC_DATA/profiles/$_rp.conf" 2>/dev/null | cut -d' ' -f1)
+        case "$_rp_ph" in
+            6572f8e41d45b863370d94a3d9fd59b24e8df3b0|\
+            e406516f953d29b7588dd0a94bf414223fbc7746|\
+            2ebc79fbca44d574d4ac5e3558f437844c41d2b6|\
+            21174c6c02de4fdcbafc2e974d7293c32828e171)
+                rm -f "$HPC_DATA/profiles/$_rp.conf" 2>/dev/null
+                log_info "retired profile $_rp (v1.11 seeded copy) removed"
+                ;;
+            *)
+                mkdir -p "$_m_ret" 2>/dev/null
+                mv -f "$HPC_DATA/profiles/$_rp.conf" "$_m_ret/$_rp.conf" 2>/dev/null
+                log_info "user-modified retired profile $_rp stashed to state/retired_profiles_v11 (restorable, no longer listed)"
+                ;;
+        esac
+    done
 }
 
 # Add keys introduced by newer versions to an existing config, without
