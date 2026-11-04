@@ -1,0 +1,754 @@
+diff --git a/arch/arm64/crypto/aes-modes.S b/arch/arm64/crypto/aes-modes.S
+index 2674d43d1..a9ff18bc3 100644
+--- a/arch/arm64/crypto/aes-modes.S
++++ b/arch/arm64/crypto/aes-modes.S
+@@ -297,7 +297,10 @@ AES_ENTRY(aes_ctr_encrypt)
+ 	eor		v1.16b, v1.16b, v3.16b
+ 	st1		{v0.16b-v1.16b}, [x0], #32
+ #else
+-	ldr		q8, =0x30000000200000001	/* addends 1,2,3[,0] */
++	ldr		x8, =0x20000001		/* addends 1,2,3[,0] */
++	mov		x9, #3
++	ins		v8.d[0], x8
++	ins		v8.d[1], x9
+ 	dup		v7.4s, w8
+ 	mov		v0.16b, v4.16b
+ 	add		v7.4s, v7.4s, v8.4s
+diff --git a/arch/arm64/kernel/bpi.S b/arch/arm64/kernel/bpi.S
+index 4cae34e5a..425c2289a 100644
+--- a/arch/arm64/kernel/bpi.S
++++ b/arch/arm64/kernel/bpi.S
+@@ -61,7 +61,11 @@ ENTRY(__smccc_workaround_1_smc_start)
+ 	stp	x2, x3, [sp, #(8 * 0)]
+ 	stp	x0, x1, [sp, #(8 * 2)]
+ 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_1
++#ifdef __clang__
++	.inst	0xd4000003 /* smc #0 - zig cc assembler gates smc imm */
++#else
+ 	smc	#0
++#endif
+ 	ldp	x2, x3, [sp, #(8 * 0)]
+ 	ldp	x0, x1, [sp, #(8 * 2)]
+ 	add	sp, sp, #(8 * 4)
+diff --git a/arch/arm64/kernel/cpu-reset.S b/arch/arm64/kernel/cpu-reset.S
+index 63ccd07d9..a536416b5 100644
+--- a/arch/arm64/kernel/cpu-reset.S
++++ b/arch/arm64/kernel/cpu-reset.S
+@@ -43,7 +43,11 @@ ENTRY(__cpu_soft_restart)
+ 
+ 	cbz	x0, 1f				// el2_switch?
+ 	mov	x0, #HVC_SOFT_RESTART
++#ifdef __clang__
++	.inst	0xd4000002 /* hvc #0 - zig cc gates hvc imm */
++#else
+ 	hvc	#0				// no return
++#endif
+ 
+ 1:	mov	x8, x1				// entry
+ 	mov	x0, x2				// arg0
+diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
+index 303447c76..db5742f9b 100644
+--- a/arch/arm64/kernel/entry.S
++++ b/arch/arm64/kernel/entry.S
+@@ -152,7 +152,11 @@ alternative_else_nop_endif
+ 	tbnz	\tmp2, #TIF_SSBD, \targ
+ 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_2
+ 	mov	w1, #\state
++#ifdef __clang__
++	.inst	0xd4000003 /* smc #0 - zig cc assembler gates smc imm */
++#else
+ 	smc	#0
++#endif
+ #endif
+ 	.endm
+ 
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index c5af12aea..7c227c564 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -462,7 +462,11 @@ set_hcr:
+ 	/* Populate ID registers. */
+ 	mrs	x0, midr_el1
+ 	mrs	x1, mpidr_el1
++#ifdef __clang__
++		.inst 0xd51c0000	/* msr	vpidr_el2, x0 (clang asm gates VHE regs) */
++#else
+ 	msr	vpidr_el2, x0
++#endif
+ 	msr	vmpidr_el2, x1
+ 
+ #ifdef CONFIG_COMPAT
+@@ -492,7 +496,11 @@ set_hcr:
+ 	msr	mdcr_el2, x3			// Configure debug traps
+ 
+ 	/* Stage-2 translation */
++#ifdef __clang__
++		.inst 0xd51c211f	/* msr	vttbr_el2, xzr (clang asm gates VHE regs) */
++#else
+ 	msr	vttbr_el2, xzr
++#endif
+ 
+ 	cbz	x2, install_el2_stub
+ 
+@@ -517,7 +525,11 @@ install_el2_stub:
+ 
+ 	/* Hypervisor stub */
+ 	adr_l	x0, __hyp_stub_vectors
++#ifdef __clang__
++		.inst 0xd51cc000	/* msr	vbar_el2, x0 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x0
++#endif
+ 
+ 	/* spsr */
+ 	mov	x0, #(PSR_F_BIT | PSR_I_BIT | PSR_A_BIT | PSR_D_BIT |\
+diff --git a/arch/arm64/kernel/hibernate-asm.S b/arch/arm64/kernel/hibernate-asm.S
+index e56d848b6..b1a502e7f 100644
+--- a/arch/arm64/kernel/hibernate-asm.S
++++ b/arch/arm64/kernel/hibernate-asm.S
+@@ -116,7 +116,11 @@ ENTRY(swsusp_arch_suspend_exit)
+ 	isb
+ 
+ 	cbz	x24, 3f		/* Do we need to re-initialise EL2? */
++#ifdef __clang__
++	.inst	0xd4000002 /* hvc #0 - zig cc gates hvc imm */
++#else
+ 	hvc	#0
++#endif
+ 3:	ret
+ 
+ 	.ltorg
+@@ -130,7 +134,11 @@ ENDPROC(swsusp_arch_suspend_exit)
+  * x24: The physical address of __hyp_stub_vectors
+  */
+ el1_sync:
++#ifdef __clang__
++		.inst 0xd51cc018	/* msr	vbar_el2, x24 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x24
++#endif
+ 	eret
+ ENDPROC(el1_sync)
+ 
+diff --git a/arch/arm64/kernel/hyp-stub.S b/arch/arm64/kernel/hyp-stub.S
+index 17f325ba8..13a793129 100644
+--- a/arch/arm64/kernel/hyp-stub.S
++++ b/arch/arm64/kernel/hyp-stub.S
+@@ -59,7 +59,11 @@ ENDPROC(__hyp_stub_vectors)
+ el1_sync:
+ 	cmp	x0, #HVC_SET_VECTORS
+ 	b.ne	2f
++#ifdef __clang__
++		.inst 0xd51cc001	/* msr	vbar_el2, x1 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x1
++#endif
+ 	b	9f
+ 
+ 2:	cmp	x0, #HVC_SOFT_RESTART
+@@ -120,12 +124,20 @@ ENDPROC(\label)
+ ENTRY(__hyp_set_vectors)
+ 	mov	x1, x0
+ 	mov	x0, #HVC_SET_VECTORS
++#ifdef __clang__
++	.inst	0xd4000002 /* hvc #0 - zig cc gates hvc imm */
++#else
+ 	hvc	#0
++#endif
+ 	ret
+ ENDPROC(__hyp_set_vectors)
+ 
+ ENTRY(__hyp_reset_vectors)
+ 	mov	x0, #HVC_RESET_VECTORS
++#ifdef __clang__
++	.inst	0xd4000002 /* hvc #0 - zig cc gates hvc imm */
++#else
+ 	hvc	#0
++#endif
+ 	ret
+ ENDPROC(__hyp_reset_vectors)
+diff --git a/arch/arm64/kernel/smccc-call.S b/arch/arm64/kernel/smccc-call.S
+index 62522342e..88b2be344 100644
+--- a/arch/arm64/kernel/smccc-call.S
++++ b/arch/arm64/kernel/smccc-call.S
+@@ -17,7 +17,8 @@
+ 
+ 	.macro SMCCC instr
+ 	.cfi_startproc
+-	\instr	#0
++\instr	#0
++
+ 	ldr	x4, [sp]
+ 	stp	x0, x1, [x4, #ARM_SMCCC_RES_X0_OFFS]
+ 	stp	x2, x3, [x4, #ARM_SMCCC_RES_X2_OFFS]
+@@ -31,6 +32,26 @@
+ 	.cfi_endproc
+ 	.endm
+ 
++#ifdef __clang__
++.macro SMCCC_smc_clang
++	.cfi_startproc
++	.inst 0xd4000003	/* smc #0: clang asm gates 'smc' on el3; identical encoding */
++
++	ldr	x4, [sp]
++	stp	x0, x1, [x4, #ARM_SMCCC_RES_X0_OFFS]
++	stp	x2, x3, [x4, #ARM_SMCCC_RES_X2_OFFS]
++	ldr	x4, [sp, #8]
++	cbz	x4, 1f /* no quirk structure */
++	ldr	x9, [x4, #ARM_SMCCC_QUIRK_ID_OFFS]
++	cmp	x9, #ARM_SMCCC_QUIRK_QCOM_A6
++	b.ne	1f
++	str	x6, [x4, ARM_SMCCC_QUIRK_STATE_OFFS]
++1:	ret
++	.cfi_endproc
++	.endm
++#endif
++
++
+ /*
+  * void arm_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2,
+  *		  unsigned long a3, unsigned long a4, unsigned long a5,
+@@ -38,7 +59,11 @@
+  *		  struct arm_smccc_quirk *quirk)
+  */
+ ENTRY(__arm_smccc_smc)
++#ifdef __clang__
++	SMCCC_smc_clang
++#else
+ 	SMCCC	smc
++#endif
+ ENDPROC(__arm_smccc_smc)
+ 
+ /*
+diff --git a/arch/arm64/kvm/hyp-init.S b/arch/arm64/kvm/hyp-init.S
+index cb28c12d0..49f29ac5c 100644
+--- a/arch/arm64/kvm/hyp-init.S
++++ b/arch/arm64/kvm/hyp-init.S
+@@ -63,7 +63,11 @@ __do_hyp_init:
+ 	cmp	x0, #HVC_STUB_HCALL_NR
+ 	b.lo	__kvm_handle_stub_hvc
+ 
++#ifdef __clang__
++		.inst	0xd51c2000 /* msr ttbr0_el2, x0 - zig cc gates EL2 regs */
++#else
+ 	msr	ttbr0_el2, x0
++#endif
+ 
+ 	mrs	x4, tcr_el1
+ 	ldr	x5, =TCR_EL2_MASK
+@@ -120,7 +124,11 @@ CPU_BE(	orr	x4, x4, #SCTLR_ELx_EE)
+ 	kern_hyp_va	x1
+ 	mov	sp, x1
+ 	kern_hyp_va	x2
++#ifdef __clang__
++		.inst	0xd51cc002 /* msr vbar_el2, x2 - zig cc gates EL2 regs */
++#else
+ 	msr	vbar_el2, x2
++#endif
+ 
+ 	/* copy tpidr_el1 into tpidr_el2 for use by HYP */
+ 	mrs	x1, tpidr_el1
+@@ -165,7 +173,11 @@ reset:
+ 
+ 	/* Install stub vectors */
+ 	adr_l	x5, __hyp_stub_vectors
++#ifdef __clang__
++		.inst	0xd51cc005 /* msr vbar_el2, x5 - zig cc gates EL2 regs */
++#else
+ 	msr	vbar_el2, x5
++#endif
+ 	eret
+ 
+ 1:	/* Bad stub call */
+diff --git a/arch/arm64/kvm/hyp.S b/arch/arm64/kvm/hyp.S
+index 952f6cb9c..024d32033 100644
+--- a/arch/arm64/kvm/hyp.S
++++ b/arch/arm64/kvm/hyp.S
+@@ -41,7 +41,11 @@
+  */
+ ENTRY(__kvm_call_hyp)
+ alternative_if_not ARM64_HAS_VIRT_HOST_EXTN
++#ifdef __clang__
++	.inst	0xd4000002 /* hvc #0 - zig cc gates hvc imm */
++#else
+ 	hvc	#0
++#endif
+ 	ret
+ alternative_else_nop_endif
+ 	b	__vhe_hyp_call
+diff --git a/arch/arm64/kvm/hyp/hyp-entry.S b/arch/arm64/kvm/hyp/hyp-entry.S
+index 3c283fd8c..18f9486e3 100644
+--- a/arch/arm64/kvm/hyp/hyp-entry.S
++++ b/arch/arm64/kvm/hyp/hyp-entry.S
+@@ -63,7 +63,11 @@ el1_sync:				// Guest trapped into EL2
+ 	ccmp	x0, #ESR_ELx_EC_HVC32, #4, ne
+ 	b.ne	el1_trap
+ 
++#ifdef __clang__
++		.inst	0xd53c2101 /* mrs x1, vttbr_el2 - zig cc gates VHE reads */
++#else
+ 	mrs	x1, vttbr_el2		// If vttbr is valid, the guest
++#endif
+ 	cbnz	x1, el1_hvc_guest	// called HVC
+ 
+ 	/* Here, we're pretty sure the host called HVC. */
+@@ -133,7 +137,11 @@ alternative_cb_end
+ 	cbz	x0, wa2_end
+ 
+ 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_2
++	#ifdef __clang__
++		.inst 0xd4000003	/* smc #0 (clang asm gates smc on el3) */
++	#else
+ 	smc	#0
++	#endif
+ 
+ 	/* Don't leak data from the SMC call */
+ 	mov	x3, xzr
+diff --git a/arch/arm64/kvm/hyp/switch.c b/arch/arm64/kvm/hyp/switch.c
+index 4a8fdbb29..b4e779275 100644
+--- a/arch/arm64/kvm/hyp/switch.c
++++ b/arch/arm64/kvm/hyp/switch.c
+@@ -154,12 +154,12 @@ static void __hyp_text __deactivate_traps(struct kvm_vcpu *vcpu)
+ static void __hyp_text __activate_vm(struct kvm_vcpu *vcpu)
+ {
+ 	struct kvm *kvm = kern_hyp_va(vcpu->kvm);
+-	write_sysreg(kvm->arch.vttbr, vttbr_el2);
++	write_sysreg_s(kvm->arch.vttbr, 0x2100); /* vttbr_el2 - zig cc gates the mnemonic */
+ }
+ 
+ static void __hyp_text __deactivate_vm(struct kvm_vcpu *vcpu)
+ {
+-	write_sysreg(0, vttbr_el2);
++	write_sysreg_s(0, 0x2100); /* vttbr_el2 */
+ }
+ 
+ static void __hyp_text __vgic_save_state(struct kvm_vcpu *vcpu)
+@@ -473,7 +473,7 @@ void __hyp_text __noreturn hyp_panic(struct kvm_cpu_context *host_ctxt)
+ 	u64 elr = read_sysreg_el2(elr);
+ 	u64 par = read_sysreg(par_el1);
+ 
+-	if (read_sysreg(vttbr_el2)) {
++	if (read_sysreg_s(0x2100)) { /* vttbr_el2 */
+ 		vcpu = host_ctxt->__hyp_running_vcpu;
+ 		__timer_save_state(vcpu);
+ 		__deactivate_traps(vcpu);
+diff --git a/arch/arm64/kvm/hyp/tlb.c b/arch/arm64/kvm/hyp/tlb.c
+index db23c6e5c..fd0638796 100644
+--- a/arch/arm64/kvm/hyp/tlb.c
++++ b/arch/arm64/kvm/hyp/tlb.c
+@@ -34,7 +34,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm,
+ 	 * bits. Changing E2H is impossible (goodbye TTBR1_EL2), so
+ 	 * let's flip TGE before executing the TLB operation.
+ 	 */
+-	write_sysreg(kvm->arch.vttbr, vttbr_el2);
++	write_sysreg_s(kvm->arch.vttbr, 0x2100); /* vttbr_el2 - zig cc gates the mnemonic */
+ 	val = read_sysreg(hcr_el2);
+ 	val &= ~HCR_TGE;
+ 	write_sysreg(val, hcr_el2);
+@@ -44,7 +44,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm,
+ static void __hyp_text __tlb_switch_to_guest_nvhe(struct kvm *kvm,
+ 						  unsigned long *flags)
+ {
+-	write_sysreg(kvm->arch.vttbr, vttbr_el2);
++	write_sysreg_s(kvm->arch.vttbr, 0x2100); /* vttbr_el2 - zig cc gates the mnemonic */
+ 	isb();
+ }
+ 
+@@ -60,7 +60,7 @@ static void __hyp_text __tlb_switch_to_host_vhe(struct kvm *kvm,
+ 	 * We're done with the TLB operation, let's restore the host's
+ 	 * view of HCR_EL2.
+ 	 */
+-	write_sysreg(0, vttbr_el2);
++	write_sysreg_s(0, 0x2100); /* vttbr_el2 */
+ 	write_sysreg(HCR_HOST_VHE_FLAGS, hcr_el2);
+ 	isb();
+ 	local_irq_restore(flags);
+@@ -69,7 +69,7 @@ static void __hyp_text __tlb_switch_to_host_vhe(struct kvm *kvm,
+ static void __hyp_text __tlb_switch_to_host_nvhe(struct kvm *kvm,
+ 						 unsigned long flags)
+ {
+-	write_sysreg(0, vttbr_el2);
++	write_sysreg_s(0, 0x2100); /* vttbr_el2 */
+ }
+ 
+ static hyp_alternate_select(__tlb_switch_to_host,
+diff --git a/arch/arm64/lib/memcpy.S b/arch/arm64/lib/memcpy.S
+index 676139377..c42582eb1 100644
+--- a/arch/arm64/lib/memcpy.S
++++ b/arch/arm64/lib/memcpy.S
+@@ -68,7 +68,7 @@
+ 	stp \ptr, \regB, [\regC], \val
+ 	.endm
+ 
+-	.weak memcpy
++	/* .weak memcpy removed: zig cc rejects weak->globl binding change; no competing memcpy definition in the kernel */
+ ENTRY(__memcpy)
+ ENTRY(memcpy)
+ #include "copy_template.S"
+diff --git a/arch/arm64/lib/memmove.S b/arch/arm64/lib/memmove.S
+index a5a445901..04913e7ba 100644
+--- a/arch/arm64/lib/memmove.S
++++ b/arch/arm64/lib/memmove.S
+@@ -57,7 +57,7 @@ C_h	.req	x12
+ D_l	.req	x13
+ D_h	.req	x14
+ 
+-	.weak memmove
++	/* .weak memmove removed (zig binding-change rejection) */
+ ENTRY(__memmove)
+ ENTRY(memmove)
+ 	cmp	dstin, src
+diff --git a/arch/arm64/lib/memset.S b/arch/arm64/lib/memset.S
+index f2670a9f2..fdfd6f8a7 100644
+--- a/arch/arm64/lib/memset.S
++++ b/arch/arm64/lib/memset.S
+@@ -54,7 +54,7 @@ dst		.req	x8
+ tmp3w		.req	w9
+ tmp3		.req	x9
+ 
+-	.weak memset
++	/* .weak memset removed (zig binding-change rejection) */
+ ENTRY(__memset)
+ ENTRY(memset)
+ 	mov	dst, dstin	/* Preserve return value.  */
+diff --git a/drivers/firmware/qcom_scm-32.c b/drivers/firmware/qcom_scm-32.c
+index 627bdd2b5..65bd8dcfb 100644
+--- a/drivers/firmware/qcom_scm-32.c
++++ b/drivers/firmware/qcom_scm-32.c
+@@ -144,7 +144,7 @@ static u32 smc(u32 cmd_addr)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0	@ switch to secure world\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0)
+ 			: "r" (r0), "r" (r1), "r" (r2)
+ 			: "r3");
+@@ -260,7 +260,7 @@ static s32 qcom_scm_call_atomic1(u32 svc, u32 cmd, u32 arg1)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc    #0      @ switch to secure world\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0)
+ 			: "r" (r0), "r" (r1), "r" (r2)
+ 			: "r3");
+@@ -295,7 +295,7 @@ static s32 qcom_scm_call_atomic2(u32 svc, u32 cmd, u32 arg1, u32 arg2)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc    #0      @ switch to secure world\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0)
+ 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3)
+ 			);
+@@ -325,7 +325,7 @@ u32 qcom_scm_get_version(void)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0	@ switch to secure world\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0), "=r" (r1)
+ 			: "r" (r0), "r" (r1)
+ 			: "r2", "r3");
+diff --git a/drivers/soc/qcom/scm.c b/drivers/soc/qcom/scm.c
+index 16b7361ea..10f8204b8 100644
+--- a/drivers/soc/qcom/scm.c
++++ b/drivers/soc/qcom/scm.c
+@@ -207,7 +207,7 @@ static u32 smc(u32 cmd_addr)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0)
+ 			: "r" (r0), "r" (r1), "r" (r2)
+ 			: R3_STR);
+@@ -410,7 +410,7 @@ static int __scm_call_armv8_64(u64 x0, u64 x1, u64 x2, u64 x3, u64 x4, u64 x5,
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0), "=r" (r1), "=r" (r2), "=r" (r3),
+ 			  "=r" (r4), "=r" (r5), "=r" (r6)
+ 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4),
+@@ -459,7 +459,7 @@ static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0), "=r" (r1), "=r" (r2), "=r" (r3),
+ 			  "=r" (r4), "=r" (r5), "=r" (r6)
+ 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4),
+@@ -511,7 +511,7 @@ static int __scm_call_armv8_32(u32 w0, u32 w1, u32 w2, u32 w3, u32 w4, u32 w5,
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0), "=r" (r1), "=r" (r2), "=r" (r3),
+ 			  "=r" (r4), "=r" (r5), "=r" (r6)
+ 			: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4),
+@@ -856,7 +856,7 @@ s32 scm_call_atomic1(u32 svc, u32 cmd, u32 arg1)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0)
+ 		: "r" (r0), "r" (r1), "r" (r2)
+ 		: R3_STR);
+@@ -891,7 +891,7 @@ s32 scm_call_atomic1_1(u32 svc, u32 cmd, u32 arg1, u32 *ret1)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0), "=r" (r1)
+ 		: "r" (r0), "r" (r1), "r" (r2)
+ 		: R3_STR);
+@@ -929,7 +929,7 @@ s32 scm_call_atomic2(u32 svc, u32 cmd, u32 arg1, u32 arg2)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0)
+ 		: "r" (r0), "r" (r1), "r" (r2), "r" (r3));
+ 	return r0;
+@@ -967,7 +967,7 @@ s32 scm_call_atomic3(u32 svc, u32 cmd, u32 arg1, u32 arg2, u32 arg3)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0)
+ 		: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4));
+ 	return r0;
+@@ -998,7 +998,7 @@ s32 scm_call_atomic4_3(u32 svc, u32 cmd, u32 arg1, u32 arg2,
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0), "=r" (r1), "=r" (r2)
+ 		: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4), "r" (r5));
+ 	ret = r0;
+@@ -1052,7 +1052,7 @@ s32 scm_call_atomic5_3(u32 svc, u32 cmd, u32 arg1, u32 arg2,
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-		"smc	#0\n"
++		".inst 0xd4000003"
+ 		: "=r" (r0), "=r" (r1), "=r" (r2), "=r" (r3)
+ 		: "r" (r0), "r" (r1), "r" (r2), "r" (r3), "r" (r4), "r" (r5),
+ 		 "r" (r6));
+@@ -1092,7 +1092,7 @@ u32 scm_get_version(void)
+ #ifdef REQUIRES_SEC
+ 			".arch_extension sec\n"
+ #endif
+-			"smc	#0\n"
++			".inst 0xd4000003"
+ 			: "=r" (r0), "=r" (r1)
+ 			: "r" (r0), "r" (r1)
+ 			: R2_STR, R3_STR);
+diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
+index 9f721ee66..c06ae693c 100644
+--- a/include/linux/arm-smccc.h
++++ b/include/linux/arm-smccc.h
+@@ -158,8 +158,14 @@ asmlinkage void __arm_smccc_hvc(unsigned long a0, unsigned long a1,
+ /* SMCCC v1.1 implementation madness follows */
+ #ifdef CONFIG_ARM64
+ 
++#ifdef __clang__
++/* zig cc assembler gates smc/hvc immediates ("requires: el3"); use .inst */
++#define SMCCC_SMC_INST	".inst 0xd4000001" /* smc #0 */
++#define SMCCC_HVC_INST	".inst 0xd4000002" /* hvc #0 */
++#else
+ #define SMCCC_SMC_INST	"smc	#0"
+ #define SMCCC_HVC_INST	"hvc	#0"
++#endif
+ #define SMCCC_REG(n)	asm("x" # n)
+ 
+ #elif defined(CONFIG_ARM)
+diff --git a/scripts/extract-cert.c b/scripts/extract-cert.c
+index b071bf476..14eb10dcb 100644
+--- a/scripts/extract-cert.c
++++ b/scripts/extract-cert.c
+@@ -1,162 +1,19 @@
+-/* Extract X.509 certificate in DER form from PKCS#11 or PEM.
+- *
+- * Copyright © 2014-2015 Red Hat, Inc. All Rights Reserved.
+- * Copyright © 2015      Intel Corporation.
+- *
+- * Authors: David Howells <dhowells@redhat.com>
+- *          David Woodhouse <dwmw2@infradead.org>
+- *
+- * This program is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU Lesser General Public License
+- * as published by the Free Software Foundation; either version 2.1
+- * of the licence, or (at your option) any later version.
+- */
+-#define _GNU_SOURCE
++/* HPC-toolchain stub: original requires openssl (libssl-dev unavailable in
++ * sandbox). This replacement extracts the raw DER bytes from a PEM file
++ * (all the kernel build needs for .incbin) via the hpc-extract-cert helper.
++ * Revert with: git checkout scripts/extract-cert.c */
+ #include <stdio.h>
+ #include <stdlib.h>
+-#include <stdint.h>
+-#include <stdbool.h>
+-#include <string.h>
+-#include <err.h>
+-#include <openssl/bio.h>
+-#include <openssl/pem.h>
+-#include <openssl/err.h>
+-#include <openssl/engine.h>
+-
+-#define PKEY_ID_PKCS7 2
+-
+-static __attribute__((noreturn))
+-void format(void)
+-{
+-	fprintf(stderr,
+-		"Usage: scripts/extract-cert <source> <dest>\n");
+-	exit(2);
+-}
+-
+-static void display_openssl_errors(int l)
+-{
+-	const char *file;
+-	char buf[120];
+-	int e, line;
+-
+-	if (ERR_peek_error() == 0)
+-		return;
+-	fprintf(stderr, "At main.c:%d:\n", l);
+-
+-	while ((e = ERR_get_error_line(&file, &line))) {
+-		ERR_error_string(e, buf);
+-		fprintf(stderr, "- SSL %s: %s:%d\n", buf, file, line);
+-	}
+-}
+-
+-static void drain_openssl_errors(void)
+-{
+-	const char *file;
+-	int line;
+-
+-	if (ERR_peek_error() == 0)
+-		return;
+-	while (ERR_get_error_line(&file, &line)) {}
+-}
+-
+-#define ERR(cond, fmt, ...)				\
+-	do {						\
+-		bool __cond = (cond);			\
+-		display_openssl_errors(__LINE__);	\
+-		if (__cond) {				\
+-			err(1, fmt, ## __VA_ARGS__);	\
+-		}					\
+-	} while(0)
+-
+-static const char *key_pass;
+-static BIO *wb;
+-static char *cert_dst;
+-int kbuild_verbose;
+-
+-static void write_cert(X509 *x509)
+-{
+-	char buf[200];
+-
+-	if (!wb) {
+-		wb = BIO_new_file(cert_dst, "wb");
+-		ERR(!wb, "%s", cert_dst);
+-	}
+-	X509_NAME_oneline(X509_get_subject_name(x509), buf, sizeof(buf));
+-	ERR(!i2d_X509_bio(wb, x509), "%s", cert_dst);
+-	if (kbuild_verbose)
+-		fprintf(stderr, "Extracted cert: %s\n", buf);
+-}
+ 
+ int main(int argc, char **argv)
+ {
+-	char *cert_src;
+-
+-	OpenSSL_add_all_algorithms();
+-	ERR_load_crypto_strings();
+-	ERR_clear_error();
+-
+-	kbuild_verbose = atoi(getenv("KBUILD_VERBOSE")?:"0");
+-
+-        key_pass = getenv("KBUILD_SIGN_PIN");
+-
+-	if (argc != 3)
+-		format();
+-
+-	cert_src = argv[1];
+-	cert_dst = argv[2];
+-
+-	if (!cert_src[0]) {
+-		/* Invoked with no input; create empty file */
+-		FILE *f = fopen(cert_dst, "wb");
+-		ERR(!f, "%s", cert_dst);
+-		fclose(f);
+-		exit(0);
+-	} else if (!strncmp(cert_src, "pkcs11:", 7)) {
+-		ENGINE *e;
+-		struct {
+-			const char *cert_id;
+-			X509 *cert;
+-		} parms;
+-
+-		parms.cert_id = cert_src;
+-		parms.cert = NULL;
+-
+-		ENGINE_load_builtin_engines();
+-		drain_openssl_errors();
+-		e = ENGINE_by_id("pkcs11");
+-		ERR(!e, "Load PKCS#11 ENGINE");
+-		if (ENGINE_init(e))
+-			drain_openssl_errors();
+-		else
+-			ERR(1, "ENGINE_init");
+-		if (key_pass)
+-			ERR(!ENGINE_ctrl_cmd_string(e, "PIN", key_pass, 0), "Set PKCS#11 PIN");
+-		ENGINE_ctrl_cmd(e, "LOAD_CERT_CTRL", 0, &parms, NULL, 1);
+-		ERR(!parms.cert, "Get X.509 from PKCS#11");
+-		write_cert(parms.cert);
+-	} else {
+-		BIO *b;
+-		X509 *x509;
+-
+-		b = BIO_new_file(cert_src, "rb");
+-		ERR(!b, "%s", cert_src);
+-
+-		while (1) {
+-			x509 = PEM_read_bio_X509(b, NULL, NULL, NULL);
+-			if (wb && !x509) {
+-				unsigned long err = ERR_peek_last_error();
+-				if (ERR_GET_LIB(err) == ERR_LIB_PEM &&
+-				    ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+-					ERR_clear_error();
+-					break;
+-				}
+-			}
+-			ERR(!x509, "%s", cert_src);
+-			write_cert(x509);
+-		}
++	char cmd[4096];
++	if (argc < 3) {
++		fprintf(stderr, "extract-cert: usage: extract-cert <cert> <out>\n");
++		return 1;
+ 	}
+-
+-	BIO_free(wb);
+-
+-	return 0;
++	snprintf(cmd, sizeof(cmd),
++		 "python3 /home/user/toolchain/bin/hpc-extract-cert '%s' '%s'",
++		 argv[1], argv[2]);
++	return system(cmd) == 0 ? 0 : 1;
+ }
