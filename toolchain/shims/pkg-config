@@ -1,0 +1,11 @@
+#!/bin/sh
+# Minimal pkg-config for the kernel build (kernel probes for it).
+for m in "$@"; do
+  case "$m" in
+    --version) echo "0.29.2" ;;
+    --modversion*) echo "1.0" ;;
+    --cflags|--libs|--cflags-only|--libs-only) : ;;
+    *) exit 1 ;;
+  esac
+done
+exit 0

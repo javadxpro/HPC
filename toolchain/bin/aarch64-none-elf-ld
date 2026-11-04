@@ -1,0 +1,59 @@
+#!/bin/sh
+# HPC cross linker wrapper: zig-cc-driven lld, reported as LLD.
+# - version: -v/-V/--version with no substantive flags
+# - flag probes: the kernel probes `ld <flag> -v`; we test the flags against a
+#   trivial real link (zig's allowlist + lld are the source of truth)
+# - drops bfd-only flags (-X, -EL, -maarch64*, -pie, -nostdlib [driver adds it])
+ZIG=/home/user/zigenv/lib/python3.11/site-packages/ziglang/zig
+PROBE_OBJ=/home/user/toolchain/hpc-probe.o
+has_v=0; substantive=0
+for a in "$@"; do
+  case "$a" in
+    -v|-V|--version) has_v=1 ;;
+    -X|-pie|-EL|-EB|-nostdlib|-maarch64linux|-maarch64linuxb|-maarch64elf|-maarch64elfb|--fix-cortex-a53-843419|--no-apply-dynamic-relocs|--pack-dyn-relocs=*) : ;;
+    *) substantive=1 ;;
+  esac
+done
+if [ $has_v -eq 1 ]; then
+  if [ $substantive -eq 0 ]; then
+    echo "LLD 18.1.3 (HPC zig-ld wrapper)"
+    exit 0
+  fi
+  # flag probe: run the flags through a trivial link
+  args=""
+  while [ $# -gt 0 ]; do
+    a="$1"; shift
+    case "$a" in
+      -v|-V|--version|-X|-pie|-EL|-EB|-nostdlib|-maarch64linux|-maarch64linuxb|-maarch64elf|-maarch64elfb|--fix-cortex-a53-843419|--no-apply-dynamic-relocs|--pack-dyn-relocs=*) : ;;
+      -z|-T|-L|-l|-I) args="$args -Wl,$a,$1"; shift ;;
+      -*) args="$args -Wl,$a" ;;
+      *) : ;;
+    esac
+  done
+  $ZIG cc -target aarch64-linux-gnu -nostdlib $args $PROBE_OBJ -o /dev/null
+  exit $?
+fi
+out=""
+linkargs=""
+objs=""
+shared=0
+shfl="-nostdlib"
+while [ $# -gt 0 ]; do
+  a="$1"; shift
+  case "$a" in
+    -X|-pie|-EL|-EB|-nostdlib|-maarch64linux|-maarch64linuxb|-maarch64elf|-maarch64elfb|--fix-cortex-a53-843419|--no-apply-dynamic-relocs|--pack-dyn-relocs=*) : ;;
+    -shared|--shared) shared=1 ;;
+    -r) shfl="$shfl -r" ;;  # relocatable link: zig cc takes -r as a driver flag (-Wl,-r is rejected)
+    -o) out="$1"; shift ;;
+    -z) linkargs="$linkargs -Wl,-z,$1"; shift ;;
+    -T) linkargs="$linkargs -Wl,-T,$1"; shift ;;
+    -L) linkargs="$linkargs -Wl,-L,$1"; shift ;;
+    -l) linkargs="$linkargs -Wl,-l,$1"; shift ;;
+    -I) linkargs="$linkargs -Wl,-I,$1"; shift ;;
+    -*) linkargs="$linkargs -Wl,$a" ;;
+    *.o|*.a|*.so|*.so.dbg|*.bin|*.o.*) objs="$objs $a" ;;
+    *) linkargs="$linkargs -Wl,-T,$a" ;;
+  esac
+done
+[ $shared -eq 1 ] && shfl="$shfl -shared"
+exec $ZIG cc -target aarch64-linux-gnu $shfl $linkargs $objs -o "$out"

@@ -1,0 +1,7 @@
+#!/bin/sh
+# bc shim: use a real bc if one is ever installed, else the Python
+# timeconst implementation (the only bc program the 4.14 kernel runs).
+for c in /usr/bin/bc /bin/bc; do
+  [ -x "$c" ] && exec "$c" "$@"
+done
+exec python3 /home/user/toolchain/bin/bc-py "$@"

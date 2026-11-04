@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""aarch64 ELF -> raw binary (objcopy -O binary) with --remove-section support.
+Usage: hpc-objcopy-bin [-O binary] [--gap-fill=0xNN] [-R section]* in out
+"""
+import struct, sys
+
+args = sys.argv[1:]
+gap = b'\x00'
+remove = []
+src = dst = None
+pos = 0
+while pos < len(args):
+    a = args[pos]
+    if a == '-O':
+        pos += 2
+    elif a == '--output-target':
+        pos += 2
+    elif a.startswith('--output-target='):
+        pos += 1
+    elif a == '--gap-fill':
+        gap = bytes([int(args[pos+1], 0) & 0xff]); pos += 2
+    elif a.startswith('--gap-fill='):
+        gap = bytes([int(a.split('=', 1)[1], 0) & 0xff]); pos += 1
+    elif a in ('-R', '--remove-section'):
+        remove.append(args[pos+1]); pos += 2
+    elif a.startswith('--remove-section='):
+        remove.append(a.split('=', 1)[1]); pos += 1
+    elif a == '-S' or a == '--strip-all' or a == '-g':
+        pos += 1
+    elif a.startswith('-'):
+        pos += 1  # ignore other flags
+    else:
+        if src is None:
+            src = a
+        else:
+            dst = a
+        pos += 1
+
+with open(src, 'rb') as f:
+    data = f.read()
+
+if data[:4] != b'\x7fELF':
+    sys.exit('hpc-objcopy-bin: not an ELF file: %s' % src)
+is64 = data[4]
+if is64 != 2:
+    sys.exit('hpc-objcopy-bin: only ELF64 supported')
+e_shoff = struct.unpack_from('<Q', data, 0x28)[0]
+e_shentsize = struct.unpack_from('<H', data, 0x3A)[0]
+e_shnum = struct.unpack_from('<H', data, 0x3C)[0]
+e_shstrndx = struct.unpack_from('<H', data, 0x3E)[0]
+
+sections = []
+for i in range(e_shnum):
+    off = e_shoff + i * e_shentsize
+    sh_name, sh_type, sh_flags, sh_addr, sh_offset, sh_size = struct.unpack_from('<IIQQQQ', data, off)
+    sections.append({'name': sh_name, 'type': sh_type, 'flags': sh_flags,
+                     'addr': sh_addr, 'off': sh_offset, 'size': sh_size})
+
+# section header string table
+shstr = sections[e_shstrndx]
+def sec_name(n):
+    end = data.find(b'\x00', shstr['off'] + n)
+    return data[shstr['off'] + n:end].decode('latin1')
+
+# objcopy -O binary semantics: only SHF_ALLOC (0x2) sections form the image
+alloc = [s for s in sections if s['flags'] & 2 and sec_name(s['name']) not in remove]
+if not alloc:
+    sys.exit('hpc-objcopy-bin: no alloc sections left after removal')
+
+minv = min(s['addr'] for s in alloc)
+maxv = max(s['addr'] + s['size'] for s in alloc)
+out = bytearray(gap * (maxv - minv))
+for s in alloc:
+    if s['type'] == 8:  # NOBITS: gap-filled, no file data
+        continue
+    if s['size'] == 0:
+        continue
+    out[s['addr'] - minv:s['addr'] - minv + s['size']] = data[s['off']:s['off'] + s['size']]
+
+with open(dst, 'wb') as f:
+    f.write(out)

@@ -1,4 +1,10 @@
 # Hamedis Performance Core (HPC)
+> **PROJECT CLOSED (2026-11-04).** v1.12.2 is the final release. The device
+> (Xiaomi 11 Lite 5G NE / Vayu) is no longer available, so development is
+> finished and this repository is archived (read-only). Everything below is
+> preserved as-is. See `toolchain/README.md` for the zig-based aarch64 cross
+> toolchain that builds the full Droidian Vayu 4.14.355 kernel from source.
+
 
 Adaptive performance + kernel manager + cleaner & speed booster as a
 Magisk module for Android.

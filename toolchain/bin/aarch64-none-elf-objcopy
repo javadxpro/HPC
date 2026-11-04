@@ -1,0 +1,38 @@
+#!/bin/sh
+# zig objcopy shim for the kernel build.
+# - zig 0.17: plain copy and -S/--strip-all are "unimplemented":
+#   drop -S and, when no transform remains, byte-copy (functionally identical
+#   for vdso: kernel resolves VDSO symbols via build-time offsets).
+ZIG=/home/user/zigenv/lib/python3.11/site-packages/ziglang/zig
+for a in "$@"; do
+  case "$a" in
+    -I*ihex*|-O*ihex*|--input-target=*ihex*|--output-target=*ihex*)
+      # zig objcopy lacks ihex support; host GNU objcopy handles it (arch-agnostic)
+      exec /usr/bin/objcopy "$@" ;;
+  esac
+done
+# zig objcopy can't remove sections (-R); aarch64 ELF->binary with -R goes to
+# the python ELF dumper (used for arch/arm64/boot/Image: -R .note -R .comment)
+for a in "$@"; do
+  case "$a" in
+    -R|--remove-section|--remove-section=*)
+      exec /home/user/toolchain/bin/hpc-objcopy-bin "$@" ;;
+  esac
+done
+positional=""
+options=""
+for a in "$@"; do
+  case "$a" in
+    -S|--strip-all) : ;;
+    -*) options="$options $a" ;;
+    *)  positional="$positional $a" ;;
+  esac
+done
+set -- $options
+if [ $# -eq 0 ]; then
+  set -- $positional
+  in=$1; out=$2
+  cp "$in" "$out"
+  exit $?
+fi
+exec $ZIG objcopy "$@" $positional

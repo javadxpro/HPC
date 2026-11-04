@@ -1,0 +1,137 @@
+#!/bin/sh
+# HPC cross compiler wrapper: zig cc impersonating a GCC-10.5 aarch64 cross
+# compiler for the Vayu 4.14 kernel build.
+#
+# Transformations (all empirically determined against zig 0.17 / LLVM 18.1):
+# - version banner for -v/--version with no input files (the kernel greps
+#   "clang version" and would select the clang path)
+# - -dumpmachine / -print-libgcc-file-name / -print-sysroot impersonation
+# - -fno-pic dropped (zig aarch64-linux requires PIC; Droidian's own clang
+#   build is PIC too)
+# - -mcpu/-mtune big.LITTLE/cortex-* -> a64fx (zig 0.17 CPU table is limited;
+#   a64fx = v8.2 with LSE+RCpc, a safe subset of Kryo470 A55/A76; the kernel's
+#   explicit LSE atomics need LSE in the assembler feature set)
+# - -fno-sanitize=undefined (zig enables ubsan by default; the kernel has no
+#   ubsan runtime)
+# - -Wno-unused-command-line-argument (keeps -Werror cc-option probes clean)
+# - bare -Werror dropped (QCOM techpack adds it; per-warning -Werror=xxx kept)
+# - -fmacro-prefix-map with empty target dropped (zig mis-parses it)
+# - -D values containing quotes are rerouted into an -include header (zig's
+#   -D parser breaks on embedded quotes when the macro is expanded)
+# - depfile flags: -c compiles keep them (zig writes the .d natively); -S
+#   compiles drop them (zig silently skips the .s output when depflags are
+#   present) and a minimal fixdep-compatible .d is synthesized
+ZIG=/home/user/zigenv/lib/python3.11/site-packages/ziglang/zig
+MODE=cc
+case "$(basename "$0")" in *c++*) MODE=c++ ;; esac
+
+if [ -z "$(printf '%s\n' "$@" | grep -v '^-' | grep -v '^$' | head -1)" ]; then
+  case "$*" in
+    *--version*|-v|*" -v")
+      echo "gcc (HPC zig-cc cross aarch64) 10.5.0"
+      echo "Target: aarch64-unknown-linux-gnu"
+      echo "gcc version 10.5.0 (HPC zig-cc cross aarch64)"
+      exit 0 ;;
+  esac
+fi
+
+emit_s=0; depsfile=""; outfile=""
+for a in "$@"; do
+  case "$a" in
+    -S) emit_s=1 ;;
+    -Wp,-MD*) depsfile="${a#-Wp,-MD}"; depsfile="${depsfile#,}" ;;
+  esac
+done
+prev=""
+for a in "$@"; do
+  [ "$prev" = "-o" ] && outfile="$a"
+  prev="$a"
+done
+
+need_defs=0
+for a in "$@"; do
+  case "$a" in
+    -D*=*)
+      v="${a#-D}"
+      v="${v#*=}"
+      case "$v" in
+        *\"*) need_defs=1 ;;
+      esac ;;
+  esac
+done
+if [ $need_defs -eq 1 ]; then
+  defsfile="/tmp/hpc-cc-defs.$$.$(date +%s).h"
+  : > "$defsfile"
+else
+  defsfile=""
+fi
+
+newargs=""; sources=""; skipnext=0; val_is_src=1
+for a in "$@"; do
+  if [ $skipnext -eq 1 ]; then
+    skipnext=0
+    newargs="$newargs $a"
+    [ $val_is_src -eq 1 ] && sources="$sources $a"
+    continue
+  fi
+  case "$a" in
+    -dumpmachine)
+      echo "aarch64-unknown-linux-gnu"; exit 0 ;;
+    -print-libgcc-file-name) exit 0 ;;
+    -print-sysroot) exit 0 ;;
+    -fno-pic) : ;;
+    -Werror) : ;;
+    -fmacro-prefix-map=*=*) : ;;
+    -D*=*)
+      v="${a#-D}"
+      case "$v" in
+        *\"*)
+          name="${v%%=*}"
+          val="${v#*=}"
+          echo "#define $name $val" >> "$defsfile"
+          : ;;
+        *)
+          newargs="$newargs $a" ;;
+      esac ;;
+    -mcpu=*)
+      case "${a#-mcpu=}" in
+        cortex*|*.*) newargs="$newargs -mcpu=a64fx" ;;
+        *) newargs="$newargs $a" ;;
+      esac ;;
+    -mtune=*)
+      case "${a#-mtune=}" in
+        cortex*|*.*) newargs="$newargs -mtune=a64fx" ;;
+        *) newargs="$newargs $a" ;;
+      esac ;;
+    -Wp,-MD*|-Wp,-MMD*|-Wp,--dep-file*)
+      [ $emit_s -eq 1 ] || newargs="$newargs $a" ;;
+    -MD|-MMD|-MP|-MQ)
+      [ $emit_s -eq 1 ] || newargs="$newargs $a" ;;
+    -MF)
+      if [ $emit_s -eq 1 ]; then
+        skipnext=1; val_is_src=0
+      else
+        newargs="$newargs $a"; skipnext=1; val_is_src=0
+      fi ;;
+    -o)
+      newargs="$newargs $a"; skipnext=1; val_is_src=0 ;;
+    *)
+      newargs="$newargs $a"
+      case "$a" in
+        -*) : ;;
+        *) sources="$sources $a" ;;
+      esac ;;
+  esac
+done
+
+extra=""
+[ -n "$defsfile" ] && extra="-include $defsfile"
+$ZIG $MODE -target aarch64-linux-gnu -Wno-unused-command-line-argument \
+  -fno-sanitize=undefined $extra $newargs
+rc=$?
+# defs header stays: the depfile references it (fixdep stats it)
+if [ $rc -eq 0 ] && [ $emit_s -eq 1 ] && [ -n "$depsfile" ]; then
+  mkdir -p "$(dirname "$depsfile")" 2>/dev/null
+  printf '%s:%s\n' "$outfile" "$sources" > "$depsfile"
+fi
+exit $rc

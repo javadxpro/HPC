@@ -1,0 +1,371 @@
+diff --git a/arch/arm64/kernel/bpi.S b/arch/arm64/kernel/bpi.S
+index bd6ef8750..dbbd08c8f 100644
+--- a/arch/arm64/kernel/bpi.S
++++ b/arch/arm64/kernel/bpi.S
+@@ -61,7 +61,11 @@ ENTRY(__smccc_workaround_1_smc_start)
+ 	stp	x2, x3, [sp, #(8 * 0)]
+ 	stp	x0, x1, [sp, #(8 * 2)]
+ 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_1
++	#ifdef __clang__
++		.inst 0xd4000001	/* smc #0 (clang asm gates smc on el3) */
++	#else
+ 	smc	#0
++	#endif
+ 	ldp	x2, x3, [sp, #(8 * 0)]
+ 	ldp	x0, x1, [sp, #(8 * 2)]
+ 	add	sp, sp, #(8 * 4)
+@@ -72,7 +76,11 @@ ENTRY(__smccc_workaround_3_smc_start)
+ 	stp     x2, x3, [sp, #(8 * 0)]
+ 	stp     x0, x1, [sp, #(8 * 2)]
+ 	mov     w0, #ARM_SMCCC_ARCH_WORKAROUND_3
++	#ifdef __clang__
++		.inst 0xd4000001	/* smc #0 (clang asm gates smc on el3) */
++	#else
+ 	smc     #0
++	#endif
+ 	ldp     x2, x3, [sp, #(8 * 0)]
+ 	ldp     x0, x1, [sp, #(8 * 2)]
+ 	add     sp, sp, #(8 * 4)
+diff --git a/arch/arm64/kernel/entry.S b/arch/arm64/kernel/entry.S
+index 265c6c486..15176f91f 100644
+--- a/arch/arm64/kernel/entry.S
++++ b/arch/arm64/kernel/entry.S
+@@ -158,7 +158,11 @@
+ 	alternative_cb	arm64_update_smccc_conduit
+ 	nop					// Patched to SMC/HVC #0
+ 	alternative_cb_end
++	#ifdef __clang__
++		.inst 0xd4000001	/* smc #0 (clang asm gates smc on el3) */
++	#else
+ 	smc	#0
++	#endif
+ #endif
+ 	.endm
+ 
+diff --git a/arch/arm64/kernel/head.S b/arch/arm64/kernel/head.S
+index 670083e56..68b9aeda6 100644
+--- a/arch/arm64/kernel/head.S
++++ b/arch/arm64/kernel/head.S
+@@ -462,7 +462,11 @@ set_hcr:
+ 	/* Populate ID registers. */
+ 	mrs	x0, midr_el1
+ 	mrs	x1, mpidr_el1
++#ifdef __clang__
++		.inst 0xd51c3000	/* msr	vpidr_el2, x0 (clang asm gates VHE regs) */
++#else
+ 	msr	vpidr_el2, x0
++#endif
+ 	msr	vmpidr_el2, x1
+ 
+ #ifdef CONFIG_COMPAT
+@@ -492,7 +496,11 @@ set_hcr:
+ 	msr	mdcr_el2, x3			// Configure debug traps
+ 
+ 	/* Stage-2 translation */
++#ifdef __clang__
++		.inst 0xd51c2001	/* msr	vttbr_el2, xzr (clang asm gates VHE regs) */
++#else
+ 	msr	vttbr_el2, xzr
++#endif
+ 
+ 	cbz	x2, install_el2_stub
+ 
+@@ -517,7 +525,11 @@ install_el2_stub:
+ 
+ 	/* Hypervisor stub */
+ 	adr_l	x0, __hyp_stub_vectors
++#ifdef __clang__
++		.inst 0xd51c5200	/* msr	vbar_el2, x0 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x0
++#endif
+ 
+ 	/* spsr */
+ 	mov	x0, #(PSR_F_BIT | PSR_I_BIT | PSR_A_BIT | PSR_D_BIT |\
+diff --git a/arch/arm64/kernel/hibernate-asm.S b/arch/arm64/kernel/hibernate-asm.S
+index e56d848b6..72008a789 100644
+--- a/arch/arm64/kernel/hibernate-asm.S
++++ b/arch/arm64/kernel/hibernate-asm.S
+@@ -130,7 +130,11 @@ ENDPROC(swsusp_arch_suspend_exit)
+  * x24: The physical address of __hyp_stub_vectors
+  */
+ el1_sync:
++#ifdef __clang__
++		.inst 0xd51c5500	/* msr	vbar_el2, x24 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x24
++#endif
+ 	eret
+ ENDPROC(el1_sync)
+ 
+diff --git a/arch/arm64/kernel/hyp-stub.S b/arch/arm64/kernel/hyp-stub.S
+index 17f325ba8..9a96a604d 100644
+--- a/arch/arm64/kernel/hyp-stub.S
++++ b/arch/arm64/kernel/hyp-stub.S
+@@ -59,7 +59,11 @@ ENDPROC(__hyp_stub_vectors)
+ el1_sync:
+ 	cmp	x0, #HVC_SET_VECTORS
+ 	b.ne	2f
++#ifdef __clang__
++		.inst 0xd51c5220	/* msr	vbar_el2, x1 (clang asm gates VHE regs) */
++#else
+ 	msr	vbar_el2, x1
++#endif
+ 	b	9f
+ 
+ 2:	cmp	x0, #HVC_SOFT_RESTART
+diff --git a/arch/arm64/kernel/smccc-call.S b/arch/arm64/kernel/smccc-call.S
+index 62522342e..c7720fdd9 100644
+--- a/arch/arm64/kernel/smccc-call.S
++++ b/arch/arm64/kernel/smccc-call.S
+@@ -17,7 +17,8 @@
+ 
+ 	.macro SMCCC instr
+ 	.cfi_startproc
+-	\instr	#0
++\instr	#0
++
+ 	ldr	x4, [sp]
+ 	stp	x0, x1, [x4, #ARM_SMCCC_RES_X0_OFFS]
+ 	stp	x2, x3, [x4, #ARM_SMCCC_RES_X2_OFFS]
+@@ -31,6 +32,26 @@
+ 	.cfi_endproc
+ 	.endm
+ 
++#ifdef __clang__
++.macro SMCCC_smc_clang
++	.cfi_startproc
++	.inst 0xd4000001	/* smc #0: clang asm gates 'smc' on el3; identical encoding */
++
++	ldr	x4, [sp]
++	stp	x0, x1, [x4, #ARM_SMCCC_RES_X0_OFFS]
++	stp	x2, x3, [x4, #ARM_SMCCC_RES_X2_OFFS]
++	ldr	x4, [sp, #8]
++	cbz	x4, 1f /* no quirk structure */
++	ldr	x9, [x4, #ARM_SMCCC_QUIRK_ID_OFFS]
++	cmp	x9, #ARM_SMCCC_QUIRK_QCOM_A6
++	b.ne	1f
++	str	x6, [x4, ARM_SMCCC_QUIRK_STATE_OFFS]
++1:	ret
++	.cfi_endproc
++	.endm
++#endif
++
++
+ /*
+  * void arm_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2,
+  *		  unsigned long a3, unsigned long a4, unsigned long a5,
+@@ -38,7 +59,11 @@
+  *		  struct arm_smccc_quirk *quirk)
+  */
+ ENTRY(__arm_smccc_smc)
++#ifdef __clang__
++	SMCCC_smc_clang
++#else
+ 	SMCCC	smc
++#endif
+ ENDPROC(__arm_smccc_smc)
+ 
+ /*
+diff --git a/arch/arm64/kvm/hyp/hyp-entry.S b/arch/arm64/kvm/hyp/hyp-entry.S
+index 8086294ae..2f13cbf4d 100644
+--- a/arch/arm64/kvm/hyp/hyp-entry.S
++++ b/arch/arm64/kvm/hyp/hyp-entry.S
+@@ -161,7 +161,11 @@ alternative_cb_end
+ 	cbz	x0, wa2_end
+ 
+ 	mov	w0, #ARM_SMCCC_ARCH_WORKAROUND_2
++	#ifdef __clang__
++		.inst 0xd4000001	/* smc #0 (clang asm gates smc on el3) */
++	#else
+ 	smc	#0
++	#endif
+ 
+ 	/* Don't leak data from the SMC call */
+ 	mov	x3, xzr
+diff --git a/scripts/extract-cert.c b/scripts/extract-cert.c
+index dd1a4bd70..14eb10dcb 100644
+--- a/scripts/extract-cert.c
++++ b/scripts/extract-cert.c
+@@ -1,169 +1,19 @@
+-/* Extract X.509 certificate in DER form from PKCS#11 or PEM.
+- *
+- * Copyright © 2014-2015 Red Hat, Inc. All Rights Reserved.
+- * Copyright © 2015      Intel Corporation.
+- *
+- * Authors: David Howells <dhowells@redhat.com>
+- *          David Woodhouse <dwmw2@infradead.org>
+- *
+- * This program is free software; you can redistribute it and/or
+- * modify it under the terms of the GNU Lesser General Public License
+- * as published by the Free Software Foundation; either version 2.1
+- * of the licence, or (at your option) any later version.
+- */
+-#define _GNU_SOURCE
++/* HPC-toolchain stub: original requires openssl (libssl-dev unavailable in
++ * sandbox). This replacement extracts the raw DER bytes from a PEM file
++ * (all the kernel build needs for .incbin) via the hpc-extract-cert helper.
++ * Revert with: git checkout scripts/extract-cert.c */
+ #include <stdio.h>
+ #include <stdlib.h>
+-#include <stdint.h>
+-#include <stdbool.h>
+-#include <string.h>
+-#include <err.h>
+-#include <openssl/bio.h>
+-#include <openssl/pem.h>
+-#include <openssl/err.h>
+-#include <openssl/engine.h>
+-
+-/*
+- * OpenSSL 3.0 deprecates the OpenSSL's ENGINE API.
+- *
+- * Remove this if/when that API is no longer used
+- */
+-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+-
+-#define PKEY_ID_PKCS7 2
+-
+-static __attribute__((noreturn))
+-void format(void)
+-{
+-	fprintf(stderr,
+-		"Usage: scripts/extract-cert <source> <dest>\n");
+-	exit(2);
+-}
+-
+-static void display_openssl_errors(int l)
+-{
+-	const char *file;
+-	char buf[120];
+-	int e, line;
+-
+-	if (ERR_peek_error() == 0)
+-		return;
+-	fprintf(stderr, "At main.c:%d:\n", l);
+-
+-	while ((e = ERR_get_error_line(&file, &line))) {
+-		ERR_error_string(e, buf);
+-		fprintf(stderr, "- SSL %s: %s:%d\n", buf, file, line);
+-	}
+-}
+-
+-static void drain_openssl_errors(void)
+-{
+-	const char *file;
+-	int line;
+-
+-	if (ERR_peek_error() == 0)
+-		return;
+-	while (ERR_get_error_line(&file, &line)) {}
+-}
+-
+-#define ERR(cond, fmt, ...)				\
+-	do {						\
+-		bool __cond = (cond);			\
+-		display_openssl_errors(__LINE__);	\
+-		if (__cond) {				\
+-			err(1, fmt, ## __VA_ARGS__);	\
+-		}					\
+-	} while(0)
+-
+-static const char *key_pass;
+-static BIO *wb;
+-static char *cert_dst;
+-int kbuild_verbose;
+-
+-static void write_cert(X509 *x509)
+-{
+-	char buf[200];
+-
+-	if (!wb) {
+-		wb = BIO_new_file(cert_dst, "wb");
+-		ERR(!wb, "%s", cert_dst);
+-	}
+-	X509_NAME_oneline(X509_get_subject_name(x509), buf, sizeof(buf));
+-	ERR(!i2d_X509_bio(wb, x509), "%s", cert_dst);
+-	if (kbuild_verbose)
+-		fprintf(stderr, "Extracted cert: %s\n", buf);
+-}
+ 
+ int main(int argc, char **argv)
+ {
+-	char *cert_src;
+-
+-	OpenSSL_add_all_algorithms();
+-	ERR_load_crypto_strings();
+-	ERR_clear_error();
+-
+-	kbuild_verbose = atoi(getenv("KBUILD_VERBOSE")?:"0");
+-
+-        key_pass = getenv("KBUILD_SIGN_PIN");
+-
+-	if (argc != 3)
+-		format();
+-
+-	cert_src = argv[1];
+-	cert_dst = argv[2];
+-
+-	if (!cert_src[0]) {
+-		/* Invoked with no input; create empty file */
+-		FILE *f = fopen(cert_dst, "wb");
+-		ERR(!f, "%s", cert_dst);
+-		fclose(f);
+-		exit(0);
+-	} else if (!strncmp(cert_src, "pkcs11:", 7)) {
+-		ENGINE *e;
+-		struct {
+-			const char *cert_id;
+-			X509 *cert;
+-		} parms;
+-
+-		parms.cert_id = cert_src;
+-		parms.cert = NULL;
+-
+-		ENGINE_load_builtin_engines();
+-		drain_openssl_errors();
+-		e = ENGINE_by_id("pkcs11");
+-		ERR(!e, "Load PKCS#11 ENGINE");
+-		if (ENGINE_init(e))
+-			drain_openssl_errors();
+-		else
+-			ERR(1, "ENGINE_init");
+-		if (key_pass)
+-			ERR(!ENGINE_ctrl_cmd_string(e, "PIN", key_pass, 0), "Set PKCS#11 PIN");
+-		ENGINE_ctrl_cmd(e, "LOAD_CERT_CTRL", 0, &parms, NULL, 1);
+-		ERR(!parms.cert, "Get X.509 from PKCS#11");
+-		write_cert(parms.cert);
+-	} else {
+-		BIO *b;
+-		X509 *x509;
+-
+-		b = BIO_new_file(cert_src, "rb");
+-		ERR(!b, "%s", cert_src);
+-
+-		while (1) {
+-			x509 = PEM_read_bio_X509(b, NULL, NULL, NULL);
+-			if (wb && !x509) {
+-				unsigned long err = ERR_peek_last_error();
+-				if (ERR_GET_LIB(err) == ERR_LIB_PEM &&
+-				    ERR_GET_REASON(err) == PEM_R_NO_START_LINE) {
+-					ERR_clear_error();
+-					break;
+-				}
+-			}
+-			ERR(!x509, "%s", cert_src);
+-			write_cert(x509);
+-		}
++	char cmd[4096];
++	if (argc < 3) {
++		fprintf(stderr, "extract-cert: usage: extract-cert <cert> <out>\n");
++		return 1;
+ 	}
+-
+-	BIO_free(wb);
+-
+-	return 0;
++	snprintf(cmd, sizeof(cmd),
++		 "python3 /home/user/toolchain/bin/hpc-extract-cert '%s' '%s'",
++		 argv[1], argv[2]);
++	return system(cmd) == 0 ? 0 : 1;
+ }
