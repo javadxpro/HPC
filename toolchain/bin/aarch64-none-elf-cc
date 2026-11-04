@@ -80,7 +80,7 @@ for a in "$@"; do
     -print-libgcc-file-name) exit 0 ;;
     -print-sysroot) exit 0 ;;
     -fno-pic) : ;;
-    -Werror) : ;;
+    -Werror|-Werror=*|-Werror,*) : ;;  # vendor code: drop -Werror in all forms (= and comma)
     -fmacro-prefix-map=*=*) : ;;
     -D*=*)
       v="${a#-D}"
