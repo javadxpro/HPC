@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Minimal cpio -p (pipe/copy) shim for the kernel kheaders build.
+Supports: cpio [--quiet|-q] -pd <dest>  (plain file list on stdin).
+"""
+import os, shutil, sys
+
+args = [a for a in sys.argv[1:] if not a.startswith('-')]
+dest = args[0] if args else '.'
+for line in sys.stdin:
+    src = line.strip()
+    if not src:
+        continue
+    dst = os.path.join(dest, src)
+    d = os.path.dirname(dst)
+    if d:
+        os.makedirs(d, exist_ok=True)
+    shutil.copy2(src, dst)
+sys.exit(0)

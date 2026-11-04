@@ -12,7 +12,7 @@ mkdir -p /usr/local/lib
 [ -e /usr/lib/x86_64-linux-gnu/libssl.so.3 ] && ln -sf /usr/lib/x86_64-linux-gnu/libssl.so.3 /usr/local/lib/libssl.so
 # /usr/local/bin shims (world-writable, wiped by sandbox resets)
 if [ -w /usr/local/bin ]; then
-  for s in bc bc-py; do ln -sf /home/user/toolchain/bin/$s /usr/local/bin/$s; done
+  for s in bc bc-py cpio; do ln -sf /home/user/toolchain/bin/$s /usr/local/bin/$s; done
   ln -sf /home/user/toolchain/shims/pkg-config /usr/local/bin/pkg-config 2>/dev/null || true
 fi
 echo "hpc-toolchain restored."
