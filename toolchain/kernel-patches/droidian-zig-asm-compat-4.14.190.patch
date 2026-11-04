@@ -555,7 +555,7 @@ index 16b7361ea..10f8204b8 100644
  			: "r" (r0), "r" (r1)
  			: R2_STR, R3_STR);
 diff --git a/include/linux/arm-smccc.h b/include/linux/arm-smccc.h
-index 9f721ee66..c06ae693c 100644
+index 9f721ee66..a6fa0bef3 100644
 --- a/include/linux/arm-smccc.h
 +++ b/include/linux/arm-smccc.h
 @@ -158,8 +158,14 @@ asmlinkage void __arm_smccc_hvc(unsigned long a0, unsigned long a1,
@@ -564,7 +564,7 @@ index 9f721ee66..c06ae693c 100644
  
 +#ifdef __clang__
 +/* zig cc assembler gates smc/hvc immediates ("requires: el3"); use .inst */
-+#define SMCCC_SMC_INST	".inst 0xd4000001" /* smc #0 */
++#define SMCCC_SMC_INST	".inst 0xd4000003" /* smc #0 (keystone-verified) */
 +#define SMCCC_HVC_INST	".inst 0xd4000002" /* hvc #0 */
 +#else
  #define SMCCC_SMC_INST	"smc	#0"

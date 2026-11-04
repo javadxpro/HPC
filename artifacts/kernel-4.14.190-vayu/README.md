@@ -20,6 +20,11 @@ Matches the kernel the phone currently runs: `uname -r` =
 ## Verification performed
 - All `.inst` encodings keystone-engine verified (smc #0 = 0xd4000003,
   hvc #0 = 0xd4000002, VHE regs vpidr/vttbr/vbar/ttbr0_el2).
+- Final pass: `SMCCC_SMC_INST` in include/linux/arm-smccc.h corrected
+  from 0xd4000001 (which is `hvc #1`!) to 0xd4000003 — the CPU errata
+  path (cpu_errata.o) now emits smc #0. Full-tree audit: the byte
+  sequence 0xd4000001 does not occur in any .text section of any
+  object (only in data/relocation tables, as elsewhere in kernels).
 - Byte-level check of every patched object in the build (little-endian
   opcode present in the compiled .o): smccc-call, bpi, head, hyp-stub,
   hyp-init, hyp-entry, kvm/hyp, qcom scm — all OK.
