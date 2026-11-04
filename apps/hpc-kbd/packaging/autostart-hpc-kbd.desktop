@@ -1,0 +1,5 @@
+[Desktop Entry]
+Type=Application
+Name=HPC Keyboard
+Comment=hpc-kbd on-screen keyboard (sm.puri.OSK0)
+Exec=/usr/bin/hpc-kbd
