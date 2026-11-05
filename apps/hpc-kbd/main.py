@@ -260,7 +260,20 @@ class HpcKbdApp(Gtk.Application):
         try:
             self.osk_iface = self.build_osk_iface()
             connection.register_object(OSK_PATH, self.osk_iface, None)
-            self.log("object %s registered", OSK_PATH)
+            self.log("object %s registered on app connection", OSK_PATH)
+            # Own the phosh OSK name on THIS connection — the one that
+            # actually holds the object. phosh introspects the connection
+            # that owns sm.puri.OSK0; if the name and the object live on
+            # different connections, phosh sees an empty interface and
+            # never shows the keyboard.
+            Gio.bus_own_name_on_connection(
+                connection,
+                OSK_NAME,
+                Gio.BusNameOwnerFlags.REPLACE,
+                lambda conn, name: self.log("owned D-Bus name %s", name),
+                lambda conn, name: self.log("LOST D-Bus name %s", name),
+                None,
+            )
         except Exception as e:
             self.log("ERROR registering OSK object: %s", e)
 
@@ -285,6 +298,19 @@ class HpcKbdApp(Gtk.Application):
             )
             self.log("IM display fd %d watched", fd)
 
+        # Diagnostic: if the compositor never advertised the IMv2 global,
+        # keys can never be delivered — say so loudly in the log.
+        def _im_check():
+            if self.im is None or self.im.im is None:
+                self.log(
+                    "WARN: zwp_input_method_manager_v2 still not seen after 5s. "
+                    "Keys will NOT work until the compositor advertises it. "
+                    "Check with: wayland-info | grep -i input_method"
+                )
+            return False
+
+        GLib.timeout_add_seconds(5, _im_check)
+
     # -- Gtk.Application vfunc ---------------------------------------------------
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -304,15 +330,8 @@ def main():
     setup_logging()
     log.info("hpc-kbd starting (pid=%d, layouts=%s)", os.getpid(), LAYOUTS_FILE)
     app = HpcKbdApp()
-    # own the phosh OSK name on the session bus
-    Gio.bus_own_name(
-        Gio.BusType.SESSION,
-        OSK_NAME,
-        Gio.BusNameOwnerFlags.REPLACE,
-        lambda conn, name: log.info("owned D-Bus name %s", name),
-        None,
-        None,
-    )
+    # NOTE: sm.puri.OSK0 is owned in on_bus_acquired() on the same
+    # connection that registers the /sm/puri/OSK0 object.
     return app.run(None)
 
 

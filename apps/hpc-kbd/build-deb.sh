@@ -2,7 +2,7 @@
 # Build hpc-kbd.deb (Architecture: all — pure python).
 set -e
 cd "$(dirname "$0")"
-VER=0.1.0
+VER=0.1.1
 PKG=hpc-kbd
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
