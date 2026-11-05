@@ -34,10 +34,12 @@ if [ $has_v -eq 1 ]; then
   exit $?
 fi
 out=""
-linkargs=""
-objs=""
+args=""
 shared=0
 shfl="-nostdlib"
+# Keep -Wl flags and input files in their ORIGINAL relative order: kbuild
+# interleaves them (--whole-archive built-in.o --no-whole-archive). Reordering
+# silently disables whole-archive and drops self-contained built-in drivers.
 while [ $# -gt 0 ]; do
   a="$1"; shift
   case "$a" in
@@ -45,15 +47,11 @@ while [ $# -gt 0 ]; do
     -shared|--shared) shared=1 ;;
     -r) shfl="$shfl -r" ;;  # relocatable link: zig cc takes -r as a driver flag (-Wl,-r is rejected)
     -o) out="$1"; shift ;;
-    -z) linkargs="$linkargs -Wl,-z,$1"; shift ;;
-    -T) linkargs="$linkargs -Wl,-T,$1"; shift ;;
-    -L) linkargs="$linkargs -Wl,-L,$1"; shift ;;
-    -l) linkargs="$linkargs -Wl,-l,$1"; shift ;;
-    -I) linkargs="$linkargs -Wl,-I,$1"; shift ;;
-    -*) linkargs="$linkargs -Wl,$a" ;;
-    *.o|*.a|*.so|*.so.dbg|*.bin|*.o.*) objs="$objs $a" ;;
-    *) linkargs="$linkargs -Wl,-T,$a" ;;
+    -z|-T|-L|-l|-I) args="$args -Wl,$a,$1"; shift ;;
+    -*) args="$args -Wl,$a" ;;
+    *.o|*.a|*.so|*.so.dbg|*.bin|*.o.*) args="$args $a" ;;
+    *) args="$args -Wl,-T,$a" ;;
   esac
 done
 [ $shared -eq 1 ] && shfl="$shfl -shared"
-exec $ZIG cc -target aarch64-linux-gnu $shfl $linkargs $objs -o "$out"
+exec $ZIG cc -target aarch64-linux-gnu $shfl $args -o "$out"
