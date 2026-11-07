@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=HPC Files
+Name[fa]=فایل‌های HPC
+Comment=Powerful dual-pane file manager & archive tool
+Comment[fa]=فایل‌منیجر دوپنل و ابزار آرشیو
+Exec=hpc-files
+Icon=hpc-files
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=files;manager;archive;zip;tar;
+Keywords[fa]=فایل;آرشیو;
