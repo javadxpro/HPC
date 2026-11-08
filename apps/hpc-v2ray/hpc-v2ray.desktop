@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=HPC V2Ray
+Name[fa]=وی‌تو‌ری HPC
+Comment=VLESS proxy client (V2Ray core) for Linux
+Comment[fa]=کلاینت پروکسی VLESS روی لینوکس
+Exec=hpc-v2ray
+Icon=hpc-v2ray
+Terminal=false
+Categories=Network;
+Keywords=vless;v2ray;proxy;vpn;
+Keywords[fa]=پروکسی;پی‌ورن;
