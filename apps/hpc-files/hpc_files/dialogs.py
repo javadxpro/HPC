@@ -7,6 +7,20 @@ from gi.repository import Gtk, Gio, GLib, Gdk, GdkPixbuf, Pango
 from . import utils
 
 
+def title_bar(hb, text):
+    """GTK4-compatible header bar (new set_show_title_buttons /
+    old set_show_close_button; set_title_widget needs >=4.8)."""
+    if hasattr(hb, 'set_title_widget'):
+        hb.set_title_widget(Gtk.Label(label=text))
+    else:
+        hb.set_title(text)
+    if hasattr(hb, 'set_show_title_buttons'):
+        hb.set_show_title_buttons(True)
+    elif hasattr(hb, 'set_show_close_button'):
+        hb.set_show_close_button(True)
+    return hb
+
+
 class Dialog(Gtk.Window):
     """A small modal window: headerbar + content + action buttons."""
 
@@ -19,8 +33,7 @@ class Dialog(Gtk.Window):
         self.set_resizable(False)
         self.set_position(Gtk.WindowPosition.CENTER_ON_PARENT)
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label=title))
+        title_bar(hb, title)
         self.set_titlebar(hb)
         self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         for m in ('top', 'bottom', 'start', 'end'):
@@ -585,7 +598,7 @@ class EditorWindow(Gtk.Window):
         self.set_default_size(760, 500)
         self.set_title(os.path.basename(path) + ' — HPC Files')
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
+        title_bar(hb, os.path.basename(path))
         self.btn_save = Gtk.Button(label='Save')
         self.btn_save.connect('clicked', self.save)
         self.chk_wrap = Gtk.CheckButton(label='Word wrap')
@@ -593,7 +606,6 @@ class EditorWindow(Gtk.Window):
         self.chk_wrap.connect('toggled', self._on_wrap)
         hb.pack_end(self.btn_save)
         hb.pack_start(self.chk_wrap)
-        hb.set_title_widget(Gtk.Label(label=os.path.basename(path)))
         self.set_titlebar(hb)
         sw = Gtk.ScrolledWindow()
         self.tv = Gtk.TextView()

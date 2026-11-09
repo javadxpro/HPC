@@ -24,6 +24,21 @@ def human_kb(n):
     return '%.2f GB' % (n / (1024 * 1024))
 
 
+def title_bar(hb, text):
+    """GTK4-compatible header bar: works on both the newer
+    (set_show_title_buttons, >=4.10) and older (set_show_close_button)
+    GTK4 releases, and on GTK <4.8 (no set_title_widget)."""
+    if hasattr(hb, 'set_title_widget'):
+        hb.set_title_widget(Gtk.Label(label=text))
+    else:
+        hb.set_title(text)
+    if hasattr(hb, 'set_show_title_buttons'):
+        hb.set_show_title_buttons(True)
+    elif hasattr(hb, 'set_show_close_button'):
+        hb.set_show_close_button(True)
+    return hb
+
+
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
@@ -50,8 +65,7 @@ class MainWindow(Gtk.ApplicationWindow):
     # -------------------------------------------------------------- header
     def _build_header(self):
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label=APP_NAME))
+        title_bar(hb, APP_NAME)
         btn = Gtk.MenuButton()
         btn.set_icon_name('open-menu-symbolic')
         pop = Gtk.Popover()
@@ -207,7 +221,11 @@ class MainWindow(Gtk.ApplicationWindow):
         box = self._card('Log')
         sw = Gtk.ScrolledWindow()
         sw.set_vexpand(True)
-        sw.set_min_content_height(140)
+        if hasattr(sw, 'set_min_content_height'):
+            sw.set_min_content_height(140)
+        else:
+            sw.set_size_request(-1, 140)
+        self.log_sw = sw
         tv = Gtk.TextView()
         tv.set_editable(False)
         tv.set_monospace(True)
@@ -226,8 +244,11 @@ class MainWindow(Gtk.ApplicationWindow):
             stamp = time.strftime('%H:%M:%S')
             buf.insert_at_cursor('%s  %s\n' % (stamp, msg), None)
             buf.place_cursor(buf.get_end_iter())
-            self.log_tv.get_window().scroll_to_mark(
-                buf.get_end_iter(), 0.5, False, 0, 0)
+            # GTK4: scroll via the ScrolledWindow vadjustment
+            # (TextView.get_window() no longer exists)
+            adj = self.log_sw.get_vadjustment()
+            if adj is not None:
+                adj.set_value(adj.get_upper())
             return False
         GLib.idle_add(_do)
 

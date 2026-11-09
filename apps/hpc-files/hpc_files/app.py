@@ -440,8 +440,14 @@ class MainWindow(Gtk.ApplicationWindow):
     # -------------------------------------------------------------- header
     def _build_header(self):
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label=utils.APP_NAME))
+        if hasattr(hb, 'set_title_widget'):
+            hb.set_title_widget(Gtk.Label(label=utils.APP_NAME))
+        else:
+            hb.set_title(utils.APP_NAME)
+        if hasattr(hb, 'set_show_title_buttons'):
+            hb.set_show_title_buttons(True)
+        elif hasattr(hb, 'set_show_close_button'):
+            hb.set_show_close_button(True)
         self.btn_side = Gtk.MenuButton()
         self.btn_side.set_icon_name('sidebar-show-symbolic')
         self.btn_side.set_tooltip_text('Sidebar')

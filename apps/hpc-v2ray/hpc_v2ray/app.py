@@ -12,6 +12,20 @@ from .vlink import VLinkError
 from . import __version__, APP_NAME
 
 
+def title_bar(hb, text):
+    """GTK4-compatible header bar (new set_show_title_buttons /
+    old set_show_close_button; set_title_widget needs >=4.8)."""
+    if hasattr(hb, 'set_title_widget'):
+        hb.set_title_widget(Gtk.Label(label=text))
+    else:
+        hb.set_title(text)
+    if hasattr(hb, 'set_show_title_buttons'):
+        hb.set_show_title_buttons(True)
+    elif hasattr(hb, 'set_show_close_button'):
+        hb.set_show_close_button(True)
+    return hb
+
+
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
@@ -103,8 +117,7 @@ class MainWindow(Gtk.ApplicationWindow):
     # -------------------------------------------------------------- header
     def _build_header(self):
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label='HPC V2Ray'))
+        title_bar(hb, 'HPC V2Ray')
         btn_menu = Gtk.MenuButton()
         btn_menu.set_icon_name('open-menu-symbolic')
         pop = Gtk.Popover()
@@ -144,8 +157,7 @@ class MainWindow(Gtk.ApplicationWindow):
         d.set_default_size(360, -1)
         d.set_title('Preferences')
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label='Preferences'))
+        title_bar(hb, 'Preferences')
         d.set_titlebar(hb)
         grid = Gtk.Grid()
         for m in ('top', 'bottom', 'start', 'end'):
@@ -283,8 +295,7 @@ class MainWindow(Gtk.ApplicationWindow):
         d.set_default_size(480, 360)
         d.set_title('Add profile')
         hb = Gtk.HeaderBar()
-        hb.set_show_close_button(True)
-        hb.set_title_widget(Gtk.Label(label='Add VLESS profile(s)'))
+        title_bar(hb, 'Add VLESS profile(s)')
         d.set_titlebar(hb)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         for m in ('top', 'bottom', 'start', 'end'):

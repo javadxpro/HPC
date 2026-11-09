@@ -3,7 +3,7 @@
 # v2ray core v5.53.0 + geo data). No root needed.
 set -e
 cd "$(dirname "$0")"
-V=0.1.0
+V=0.1.1
 T=hpc-v2ray_${V}_arm64
 DIST="${DIST_DIR:-/home/user/v2ray-dist}"
 V2RAY_ZIP="$DIST/v2ray-linux-arm64-v8a.zip"
