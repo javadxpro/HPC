@@ -492,10 +492,11 @@ def compress_dialog(parent, default_name, cb):
     e1.set_text(default_name)
     l2 = Gtk.Label(label='Format:')
     l2.set_xalign(0.0)
-    combo = Gtk.ComboBoxText()
-    for f in ('zip', 'tar.gz', 'tar.xz', 'tar', 'gz', '7z'):
-        combo.append_text(f)
-    combo.set_active(0)
+    # Gtk.ComboBoxText was removed in GTK 4.18; Gtk.DropDown (4.10+)
+    # is its replacement.
+    FMTS = ('zip', 'tar.gz', 'tar.xz', 'tar', 'gz', '7z')
+    combo = Gtk.DropDown.new_from_strings(FMTS)
+    combo.set_selected(0)
     l3 = Gtk.Label(label='Password (zip only):')
     l3.set_xalign(0.0)
     e2 = Gtk.Entry()
@@ -511,7 +512,7 @@ def compress_dialog(parent, default_name, cb):
         name = e1.get_text().strip()
         if not name:
             return
-        fmt = combo.get_active_text()
+        fmt = FMTS[combo.get_selected()]
         suffix = {'zip': '.zip', 'tar.gz': '.tar.gz', 'tar.xz': '.tar.xz',
                   'tar': '.tar', 'gz': '.gz', '7z': '.7z'}[fmt]
         if not name.endswith(suffix):
@@ -546,21 +547,19 @@ def prefs_dialog(parent, app):
     chk3 = Gtk.CheckButton(label='Show modification dates in the list')
     chk3.set_active(bool(app.prefs.get('show_date', True)))
     row('List', chk3, 2)
-    combo_ext = Gtk.ComboBoxText()
-    for t in ('Next to the archive', 'Downloads folder',):
-        combo_ext.append_text(t)
-    combo_ext.set_active(0 if app.prefs.get('extract_to', 'parent') == 'parent'
-                         else 1)
+    combo_ext = Gtk.DropDown.new_from_strings(
+        ('Next to the archive', 'Downloads folder'))
+    combo_ext.set_selected(
+        0 if app.prefs.get('extract_to', 'parent') == 'parent' else 1)
     row('Extract to', combo_ext, 3)
     entry_term = Gtk.Entry()
     entry_term.set_text(app.prefs.get('terminal', ''))
     entry_term.set_placeholder_text('e.g. /usr/bin/gnome-terminal')
     row('Terminal command', entry_term, 4)
-    combo_theme = Gtk.ComboBoxText()
-    for t in ('Follow system', 'Light', 'Dark'):
-        combo_theme.append_text(t)
-    combo_theme.set_active({'auto': 0, 'light': 1, 'dark': 2}[
-        app.prefs.get('theme', 'auto')])
+    combo_theme = Gtk.DropDown.new_from_strings(
+        ('Follow system', 'Light', 'Dark'))
+    combo_theme.set_selected(
+        {'auto': 0, 'light': 1, 'dark': 2}[app.prefs.get('theme', 'auto')])
     row('Theme', combo_theme, 5)
     d.content.append(g)
 
@@ -569,9 +568,11 @@ def prefs_dialog(parent, app):
             'confirm_delete': chk1.get_active(),
             'show_hidden': chk2.get_active(),
             'show_date': chk3.get_active(),
-            'extract_to': 'parent' if combo_ext.get_active() == 0 else 'downloads',
+            'extract_to': 'parent' if combo_ext.get_selected() == 0
+            else 'downloads',
             'terminal': entry_term.get_text().strip(),
-            'theme': ('auto', 'light', 'dark')[combo_theme.get_active() or 0],
+            'theme': ('auto', 'light', 'dark')[
+                combo_theme.get_selected() or 0],
         })
         if app.prefs.get('terminal'):
             import os as _os

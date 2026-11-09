@@ -83,15 +83,16 @@ class FileRow(Gtk.ListBoxRow):
             dt.set_xalign(1.0)
             box.append(dt)
         self.set_child(box)
-        ctl = Gtk.EventControllerButtonPress.new()
-        ctl.connect('pressed', self._on_press)
-        self.add_controller(ctl)
+        # Gtk.EventControllerButtonPress was removed in GTK 4.18;
+        # a click gesture filtered to the secondary button does the
+        # same job.
+        g = Gtk.GestureClick.new()
+        g.set_button(3)
+        g.connect('pressed', self._on_press)
+        self.add_controller(g)
 
-    def _on_press(self, ctl, x, y):
-        if ctl.get_current_button() == 3:
-            self.pane.show_context(self.item)
-            return True
-        return False
+    def _on_press(self, gesture, n_press, x, y):
+        self.pane.show_context(self.item)
 
 
 class PaneView(Gtk.Box):

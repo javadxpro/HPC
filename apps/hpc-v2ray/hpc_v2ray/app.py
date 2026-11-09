@@ -121,8 +121,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
         mode_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
                            spacing=8)
-        self.radio_local = Gtk.RadioButton(label='Local (SOCKS/HTTP)')
-        self.radio_tun = Gtk.RadioButton(label='System (TUN)')
+        # Gtk.RadioButton was removed in GTK 4.18; grouped CheckButtons
+        # provide the same radio behavior.
+        self.radio_local = Gtk.CheckButton(label='Local (SOCKS/HTTP)')
+        self.radio_tun = Gtk.CheckButton(label='System (TUN)')
         self.radio_tun.set_group(self.radio_local)
         self.radio_local.connect('toggled', self._on_mode)
         if self.prefs.get('mode') == 'tun':
@@ -187,7 +189,7 @@ class MainWindow(Gtk.ApplicationWindow):
     # -------------------------------------------------------------- prefs
     def _add_actions(self):
         def simple(name, cb):
-            a = Gtk.SimpleAction.new(name)
+            a = Gio.SimpleAction.new(name)
             a.connect('activate', cb)
             self.add_action(a)
 
@@ -216,10 +218,10 @@ class MainWindow(Gtk.ApplicationWindow):
         chk_ir = Gtk.CheckButton(label='Bypass Iran domains directly '
                                        '(geosite:category-ir)')
         chk_ir.set_active(bool(self.prefs.get('bypass_ir', True)))
-        radio_auto = Gtk.RadioButton(label='Auto')
-        radio_light = Gtk.RadioButton(label='Light')
+        radio_auto = Gtk.CheckButton(label='Auto')
+        radio_light = Gtk.CheckButton(label='Light')
         radio_light.set_group(radio_auto)
-        radio_dark = Gtk.RadioButton(label='Dark')
+        radio_dark = Gtk.CheckButton(label='Dark')
         radio_dark.set_group(radio_auto)
         t = self.prefs.get('theme', 'auto')
         {'light': radio_light, 'dark': radio_dark}.get(t, radio_auto) \

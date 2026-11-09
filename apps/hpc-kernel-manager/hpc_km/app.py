@@ -131,7 +131,7 @@ class MainWindow(Gtk.ApplicationWindow):
     def _add_actions(self):
         for name, cb in (('refresh', self._on_refresh),
                          ('about', self._on_about)):
-            a = Gtk.SimpleAction.new(name)
+            a = Gio.SimpleAction.new(name)
             a.connect('activate', lambda _a, _p, cb=cb: cb())
             self.add_action(a)
 
@@ -195,11 +195,13 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def _build_kernel_card(self):
         card = self._card('Kernel to install')
-        self.radio355 = Gtk.RadioButton(label=KERNELS['355']['name']
+        # Gtk.RadioButton was removed in GTK 4.18; grouped CheckButtons
+        # provide the same radio behavior (set_group since 4.0).
+        self.radio355 = Gtk.CheckButton(label=KERNELS['355']['name']
                                         + '  (%s)'
                                         % human_kb(KERNELS['355']['size']))
         self.radio355.set_active(True)
-        self.radio190 = Gtk.RadioButton(label=KERNELS['190']['name']
+        self.radio190 = Gtk.CheckButton(label=KERNELS['190']['name']
                                         + '  (%s)'
                                         % human_kb(KERNELS['190']['size']))
         self.radio190.set_group(self.radio355)

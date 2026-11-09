@@ -543,7 +543,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def _add_actions(self):
         def simple(name, cb, param=None):
-            a = Gtk.SimpleAction.new(name, param)
+            a = Gio.SimpleAction.new(name, param)
             a.connect('activate', cb)
             self.add_action(a)
             return a
