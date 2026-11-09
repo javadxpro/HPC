@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=HPC Kernel Manager
+Name[fa]=مدیریت کرنل HPC
+Comment=A/B kernel flash manager for Droidian (repack boot.img, safe rollback)
+Comment[fa]=مدیریت فلش کرنل A/B برای Droidian
+Exec=hpc-kernel-manager
+Icon=hpc-kernel-manager
+Terminal=false
+Categories=System;
+Keywords=kernel;boot;a-b;flash;
+Keywords[fa]=کرنل;بوت;فلش;
