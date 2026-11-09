@@ -39,6 +39,16 @@ def title_bar(hb, text):
     return hb
 
 
+def wrap_label(lbl):
+    """Enable line wrapping (set_line_wrap was removed in newer GTK4;
+    use set_wrap on those)."""
+    if hasattr(lbl, 'set_line_wrap'):
+        lbl.set_line_wrap(True)
+    else:
+        lbl.set_wrap(True)
+    return lbl
+
+
 def menu_item(label='', icon=None, action=None, detailed=None,
               submenu=None, cb=None, sensitive=True):
     """GTK4-compatible popover menu item (ModelButton needs >=4.12;
@@ -172,12 +182,12 @@ class MainWindow(Gtk.ApplicationWindow):
         self.cmdline_label = Gtk.Label(label='')
         self.cmdline_label.set_xalign(0.0)
         self.cmdline_label.set_selectable(True)
-        self.cmdline_label.set_line_wrap(True)
+        wrap_label(self.cmdline_label)
         self.cmdline_label.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self.cmdline_label.add_css_class('dim-label')
         card.append(self.cmdline_label)
         self.root_banner = Gtk.Label(label='')
-        self.root_banner.set_line_wrap(True)
+        wrap_label(self.root_banner)
         self.root_banner.set_no_show_all(True)
         self.root_banner.add_css_class('warning')
         card.append(self.root_banner)
@@ -226,7 +236,7 @@ class MainWindow(Gtk.ApplicationWindow):
         box.append(self.progress)
         self.status_lbl = Gtk.Label(label='')
         self.status_lbl.set_xalign(0.0)
-        self.status_lbl.set_line_wrap(True)
+        wrap_label(self.status_lbl)
         box.append(self.status_lbl)
         btns = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.btn_backup = Gtk.Button(label='Backup')

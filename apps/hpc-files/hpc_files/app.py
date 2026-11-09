@@ -108,7 +108,7 @@ class App(Gtk.Application):
         d = dialogs.Dialog(self._win, 'Confirm', 420)
         lbl = Gtk.Label(label=message)
         lbl.set_xalign(0.0)
-        lbl.set_line_wrap(True)
+        dialogs.wrap_label(lbl)
         d.content.append(lbl)
         d.button('Cancel', d.close)
         b = d.button('Delete', cb)
@@ -762,7 +762,10 @@ class MainWindow(Gtk.ApplicationWindow):
 
     # ------------------------------------------------------------- keyboard
     def on_key(self, ctl, keyval, keycode, state):
-        mods = state & Gtk.accelerator_get_default_modmask()
+        # gtk_accelerator_get_default_modmask() is a GTK3 API; on GTK4
+        # the primary modifier is Ctrl.
+        _m = getattr(Gtk, 'accelerator_get_default_modmask', None)
+        mods = state & (_m() if _m else Gdk.Modifier4.CONTROL_MASK)
         focus = self.get_focus()
         in_text = isinstance(focus, (Gtk.Entry, Gtk.SearchEntry,
                                      Gtk.TextView))
@@ -784,14 +787,14 @@ class MainWindow(Gtk.ApplicationWindow):
         if keyval == Gdk.KEY_BackSpace and not in_text:
             pane.up()
             return True
-        if mods & Gdk.ModifierType.ALT_MASK:
+        if mods & Gdk.Modifier4.ALT_MASK:
             if keyval == Gdk.KEY_Left:
                 pane.back()
                 return True
             if keyval == Gdk.KEY_Right:
                 pane.forward()
                 return True
-        if mods & Gdk.ModifierType.CONTROL_MASK and not in_text:
+        if mods & Gdk.Modifier4.CONTROL_MASK and not in_text:
             if keyval in (Gdk.KEY_c, Gdk.KEY_C):
                 pane.copy_items()
                 return True

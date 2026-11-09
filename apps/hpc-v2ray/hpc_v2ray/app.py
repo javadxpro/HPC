@@ -26,6 +26,16 @@ def title_bar(hb, text):
     return hb
 
 
+def wrap_label(lbl):
+    """Enable line wrapping (set_line_wrap was removed in newer GTK4;
+    use set_wrap on those)."""
+    if hasattr(lbl, 'set_line_wrap'):
+        lbl.set_line_wrap(True)
+    else:
+        lbl.set_wrap(True)
+    return lbl
+
+
 def menu_item(label='', icon=None, action=None, detailed=None,
               submenu=None, cb=None, sensitive=True):
     """GTK4-compatible popover menu item (ModelButton needs >=4.12;
@@ -139,7 +149,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self.status_label = Gtk.Label(label='')
         self.status_label.set_xalign(0.0)
-        self.status_label.set_line_wrap(True)
+        wrap_label(self.status_label)
         bar.append(self.status_label)
         root.append(bar)
 
@@ -338,7 +348,7 @@ class MainWindow(Gtk.ApplicationWindow):
         l = Gtk.Label(label='Paste one or more vless:// links '
                             '(subscriptions work too — multiple lines)')
         l.set_xalign(0.0)
-        l.set_line_wrap(True)
+        wrap_label(l)
         box.append(l)
         sw = Gtk.ScrolledWindow()
         sw.set_vexpand(True)

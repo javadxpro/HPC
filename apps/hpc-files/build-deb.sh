@@ -2,7 +2,7 @@
 # Build the hpc-files .deb (no root needed).
 set -e
 cd "$(dirname "$0")"
-V=0.1.2
+V=0.1.3
 T=hpc-files_${V}_all
 rm -rf build/$T
 mkdir -p build/$T/DEBIAN

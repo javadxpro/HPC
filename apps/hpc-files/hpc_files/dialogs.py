@@ -21,6 +21,16 @@ def title_bar(hb, text):
     return hb
 
 
+def wrap_label(lbl):
+    """Enable line wrapping (set_line_wrap was removed in newer GTK4;
+    use set_wrap on those)."""
+    if hasattr(lbl, 'set_line_wrap'):
+        lbl.set_line_wrap(True)
+    else:
+        lbl.set_wrap(True)
+    return lbl
+
+
 def menu_item(label='', icon=None, action=None, detailed=None,
               submenu=None, cb=None, sensitive=True):
     """GTK4-compatible popover menu item (ModelButton needs >=4.12;
@@ -128,7 +138,7 @@ def confirm(parent, message, cb, ok_label='OK'):
     d = Dialog(parent, 'Confirm', 420)
     lbl = Gtk.Label(label=message)
     lbl.set_xalign(0.0)
-    lbl.set_line_wrap(True)
+    wrap_label(lbl)
     d.content.append(lbl)
     d.button('Cancel', d.close)
     d.button(ok_label, cb, suggested=True)
