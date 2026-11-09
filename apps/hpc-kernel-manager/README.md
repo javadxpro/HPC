@@ -5,15 +5,32 @@ GTK4 + PyGObject. Runs the whole HPC kernel flash flow with a GUI:
 status/diagnostics → backup → download → repack → flash to the other
 slot → boot-control (attempt mode with automatic rollback) → reboot.
 
-## Run
+## Run (two ways)
+
+**Way 1 — normal user (recommended):**
 
 ```bash
-sudo hpc-kernel-manager
+hpc-kernel-manager
 ```
 
-The app must run **as root** (it reads/writes raw boot partitions and
-calls markboot). Without root it shows a banner and disables the
-actions.
+Each privileged action (backup/flash/restore/mark-ok/reboot) is
+executed via **pkexec**, which shows the Phosh polkit
+authorization prompt once per action.
+
+**Way 2 — as root:**
+
+```bash
+sudo -E hpc-kernel-manager
+```
+
+Note the **`-E`**: without it `sudo` strips the Wayland session
+environment and GTK cannot initialize
+("Authorization required, but no authorization protocol specified" /
+"Gtk couldn't be initialized").
+
+If neither pkexec nor a working `sudo -E` session is available, the
+app shows a banner and disables the actions (status/diagnostics
+still work).
 
 ## What it does (safe by construction)
 

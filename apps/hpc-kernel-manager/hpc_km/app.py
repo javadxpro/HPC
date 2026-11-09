@@ -4,6 +4,8 @@ import os
 import threading
 import time
 
+import gi
+gi.require_version('Gtk', '4.0')
 from gi.repository import Gtk, Gio, GLib, Pango
 
 from . import __version__, APP_NAME
@@ -258,19 +260,16 @@ class MainWindow(Gtk.ApplicationWindow):
             cl = st['cmdline']
             self.cmdline_label.set_text(
                 'cmdline: ' + (cl[:300] + '…' if len(cl) > 300 else cl))
-            if not st['root']:
-                self.root_banner.set_text(
-                    '⚠ Run as root:  sudo hpc-kernel-manager\n'
-                    '(the app must be elevated to read/write the boot '
-                    'partitions and call markboot)')
-                self.root_banner.set_visible(True)
-                self.btn_backup.set_sensitive(False)
-                self.btn_flash.set_sensitive(False)
-                self.btn_restore.set_sensitive(False)
-                self.btn_mark.set_sensitive(False)
-                self.btn_reboot.set_sensitive(False)
-            else:
+            if st['root']:
                 self.root_banner.set_visible(False)
+            else:
+                ok, banner = self._privilege_note()
+                self.root_banner.set_text(banner)
+                self.root_banner.set_visible(True)
+                for b in (self.btn_backup, self.btn_flash,
+                          self.btn_restore, self.btn_mark,
+                          self.btn_reboot):
+                    b.set_sensitive(ok)
             return False
         GLib.idle_add(_do)
 
@@ -279,15 +278,34 @@ class MainWindow(Gtk.ApplicationWindow):
         self.refresh_status()
 
     # -------------------------------------------------------------- jobs
+    def _privilege_note(self):
+        """Return (can_act, banner_html) for the current privilege."""
+        if device.is_root():
+            return True, ''
+        if device.find_tool('pkexec'):
+            return True, ('Non-root mode: each action will show a '
+                          'polkit authorization prompt.\n'
+                          '(or run as root:  sudo -E hpc-kernel-manager)')
+        return False, ('No privilege path: pkexec not found.\n'
+                       'Run as root:  sudo -E hpc-kernel-manager')
+
     def _job(self, kind):
         if self.busy:
             return
         if kind == 'flash':
             return
+        ok, _banner = self._privilege_note()
+        if not ok:
+            self.status_lbl.set_text(self._banner_text())
+            return
         self._start(lambda prog: self._run_job(kind, prog))
 
     def _confirm_flash(self):
         if self.busy:
+            return
+        ok, _banner = self._privilege_note()
+        if not ok:
+            self.status_lbl.set_text(self._banner_text())
             return
         local = getattr(self, 'local_path', None)
         kernel = (local if local else
@@ -338,44 +356,52 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def _finish_job(self):
         self.busy = False
-        st = device.is_root()
-        self.btn_backup.set_sensitive(st)
-        self.btn_flash.set_sensitive(st)
-        self.btn_restore.set_sensitive(st)
-        self.btn_mark.set_sensitive(st)
-        self.btn_reboot.set_sensitive(st)
+        ok, _banner = self._privilege_note()
+        self.btn_backup.set_sensitive(ok)
+        self.btn_flash.set_sensitive(ok)
+        self.btn_restore.set_sensitive(ok)
+        self.btn_mark.set_sensitive(ok)
+        self.btn_reboot.set_sensitive(ok)
         self.progress.hide()
         self.progress.set_no_show_all(True)
         self.refresh_status()
         return False
 
+    def _banner_text(self):
+        return ('Non-root and no pkexec — actions disabled. '
+                'Run as root:  sudo -E hpc-kernel-manager')
+
     def _run_job(self, kind, prog=None, kernel='355'):
         t0 = time.time()
+        workdir = flasher.default_workdir()  # the USER's home, always
         try:
             if kind == 'backup':
-                path, slot = flasher.backup(self.log)
-                self.status_lbl.set_text('Backup saved: %s' % path)
+                flasher.Job('backup', {'workdir': workdir},
+                            log=self.log).run()
                 self.log('job done: backup (%.1fs)' % (time.time() - t0))
+                self.status_lbl.set_text('Backup done (see log).')
             elif kind == 'flash':
-                res = flasher.flash(self.log, kernel, progress=prog)
+                flasher.Job('flash', {'kernel': kernel,
+                                      'workdir': workdir},
+                            log=self.log).run()
                 self.status_lbl.set_text(
-                    'FLASHED to slot %s. Reboot now, then (once booted) '
-                    'press "Mark OK". Backup: %s'
-                    % (res['other'], res['backup']))
+                    'FLASHED. Reboot now, then (once booted) press '
+                    '"Mark OK".')
                 self.log('job done: flash (%.1fs) — REBOOT'
                          % (time.time() - t0))
             elif kind == 'restore':
-                flasher.restore(self.log)
+                flasher.Job('restore', {'workdir': workdir},
+                            log=self.log).run()
                 self.status_lbl.set_text('Restore done. Reboot.')
                 self.log('job done: restore (%.1fs)' % (time.time() - t0))
             elif kind == 'markok':
-                flasher.mark_current_successful(self.log)
+                flasher.Job('markok', log=self.log).run()
                 self.status_lbl.set_text(
                     'Running slot marked successful (locked).')
                 self.log('job done: mark-ok')
             elif kind == 'reboot':
                 self.status_lbl.set_text('Rebooting…')
-                flasher.reboot(self.log)
+                flasher.Job('reboot', log=self.log).run()
                 return
         except FlashError as e:
             self.status_lbl.set_text('FAILED at [%s]: %s' % (e.stage, e))

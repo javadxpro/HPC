@@ -14,6 +14,7 @@ Flow (safe by construction):
   -> if the new kernel fails to boot, the ABL automatically falls
      back to the untouched current slot after the tries expire.
 """
+import json
 import os
 import time
 import urllib.request
@@ -274,3 +275,88 @@ def reboot(log):
         os.execvp('reboot', ['reboot'])
     except Exception:
         device.run_root(['reboot'], log=log)
+
+
+def probe_root():
+    """Read-only probe for the elevated worker (or direct when root)."""
+    import platform
+    return {
+        'euid': os.geteuid(),
+        'kernel': platform.release(),
+        'slot': device.detect_slot()[0],
+        'markboot': device.markboot_caps(run_as_root=False),
+        'python': platform.python_version(),
+    }
+
+
+def _run_pkexec(action, args, log):
+    """Run one job as root through pkexec (single polkit prompt)."""
+    import subprocess
+    import sys
+    pk = device.find_tool('pkexec')
+    if not pk:
+        raise FlashError('privilege',
+                         'pkexec not found. Alternative: run the whole '
+                         'app as root with:  sudo -E hpc-kernel-manager')
+    import json
+    cmd = [pk, sys.executable, '-m', 'hpc_km.elevated', action,
+           json.dumps(args or {})]
+    log('$ ' + ' '.join(cmd))
+    log('(waiting for the authorization prompt…)'
+        if action != 'reboot' else '(authorization prompt…)')
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, text=True)
+    tail = []
+    for line in p.stdout:
+        line = line.rstrip()
+        if line:
+            log(line)
+            tail.append(line)
+    rc = p.wait()
+    if rc != 0:
+        last = next((l for l in reversed(tail) if l.startswith('FAILED')),
+                    tail[-1] if tail else 'exit code %d' % rc)
+        stage = 'job'
+        if last.startswith('FAILED [') and ']' in last:
+            stage = last[8:last.index(']')]
+            last = last[last.index(']') + 2:]
+        raise FlashError(stage, last)
+    return rc
+
+
+class Job(object):
+    """One privileged operation. Runs directly when the app is root,
+    otherwise through pkexec (one authorization prompt per job).
+    All log lines are delivered to the callback (main GTK thread)."""
+
+    def __init__(self, action, args=None, log=None):
+        self.action = action
+        self.args = args or {}
+        self.log = log or (lambda m: None)
+
+    def run(self):
+        """Blocking. Raises FlashError on failure."""
+        if device.is_root():
+            self._run_direct()
+        else:
+            _run_pkexec(self.action, self.args, self.log)
+
+    def _run_direct(self):
+        log = self.log
+        a, args = self.action, self.args
+        workdir = args.get('workdir')
+        if a == 'probe':
+            log('probe: ' + json.dumps(probe_root()))
+        elif a == 'backup':
+            backup(log, workdir)
+        elif a == 'flash':
+            flash(log, args.get('kernel', '355'), workdir=workdir,
+                  progress=None)
+        elif a == 'restore':
+            restore(log, workdir)
+        elif a == 'markok':
+            mark_current_successful(log)
+        elif a == 'reboot':
+            reboot(log)
+        else:
+            raise FlashError('unknown-action', a)
