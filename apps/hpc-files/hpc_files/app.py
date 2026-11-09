@@ -156,7 +156,9 @@ class App(Gtk.Application):
     # ------------------------------------------------------------ clipboard
     def copy_text_to_clipboard(self, text):
         try:
-            clip = Gtk.Clipboard.get_default(self._win.get_display())
+            # Gtk.Clipboard was removed from GTK4 in 4.16+; the
+            # clipboard now lives on the display (Gdk.Clipboard).
+            clip = Gdk.Display.get_default().get_clipboard()
             clip.set_text(text)
             self.toast('Copied to clipboard')
         except Exception:

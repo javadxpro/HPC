@@ -449,7 +449,8 @@ def checksum_dialog(parent, paths):
                 os.path.basename(p), res['md5'], res['sha1'], res['sha256']))
 
             def put(l=line):
-                buf.insert_at_end(l)
+                # insert_at_end() was removed in newer GTK4
+                buf.insert(buf.get_end_iter(), l)
                 return False
             GLib.idle_add(put)
     GLib.Thread.new(None, worker, None, None)

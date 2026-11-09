@@ -188,7 +188,7 @@ class MainWindow(Gtk.ApplicationWindow):
         card.append(self.cmdline_label)
         self.root_banner = Gtk.Label(label='')
         wrap_label(self.root_banner)
-        self.root_banner.set_no_show_all(True)
+        self.root_banner.set_visible(False)
         self.root_banner.add_css_class('warning')
         card.append(self.root_banner)
         return card
@@ -218,21 +218,29 @@ class MainWindow(Gtk.ApplicationWindow):
         return card
 
     def _choose_local(self, _btn):
-        dlg = Gtk.FileChooserNative(
-            new_title='Select kernel Image',
-            parent=self,
-            action=Gtk.FileChooserAction.OPEN)
+        # Gtk.FileChooserNative was removed in GTK 4.16+; use the
+        # async Gtk.FileDialog (GTK 4.10+) instead.
+        dlg = Gtk.FileDialog()
+        dlg.set_title('Select kernel Image')
         dlg.set_accept_label('Select')
-        if dlg.run() == Gtk.ResponseType.ACCEPT:
-            f = dlg.get_file()
+        dlg.set_modal(True)
+        dlg.set_transient_for(self)
+        dlg.open(self, None, self._on_local_picked)
+
+    def _on_local_picked(self, dialog, result, *args):
+        try:
+            f = dialog.open_finish(result)
+        except Exception:
+            f = None
+        dialog.destroy()
+        if f is not None and f.get_path():
             self.local_path = f.get_path()
             self.local_lbl.set_text(self.local_path)
-        dlg.destroy()
 
     def _build_actions(self):
         box = self._card('Actions')
         self.progress = Gtk.ProgressBar()
-        self.progress.set_no_show_all(True)
+        self.progress.set_visible(False)
         box.append(self.progress)
         self.status_lbl = Gtk.Label(label='')
         self.status_lbl.set_xalign(0.0)
@@ -382,28 +390,29 @@ class MainWindow(Gtk.ApplicationWindow):
         except Exception:
             slot, other = '?', '?'
         name = KERNELS.get(kernel, {}).get('name', local or '?')
-        dlg = Gtk.MessageDialog(
-            transient_for=self, modal=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.NONE,
-            text='Flash kernel %s to slot %s?' % (name, other))
-        dlg.format_secondary_text(
+        # Gtk.MessageDialog was removed in GTK 4.16+; use the async
+        # Gtk.AlertDialog (GTK 4.10+) instead.  4.18 API:
+        # new(format,...), set_detail(), set_buttons(), choose().
+        dlg = Gtk.AlertDialog.new(
+            'Flash kernel %s to slot %s?' % (name, other))
+        dlg.set_detail(
             'The current slot (%s) stays untouched as a fallback.\n'
             'Steps: backup → download → repack → dd to %s → markboot '
             '(attempt mode, tries=%d) → you reboot.\n'
             'If the new kernel fails to boot, the ABL rolls back '
             'automatically.' % (slot, other, flasher.TRIES))
-        for lbl, resp in (('Cancel', Gtk.ResponseType.CANCEL),
-                          ('Flash', Gtk.ResponseType.OK)):
-            b = dlg.add_button(lbl, resp)
-            if resp == Gtk.ResponseType.OK:
-                b.add_css_class('suggested-action')
-        dlg.connect('response', self._on_flash_response, kernel)
-        dlg.present()
+        dlg.set_buttons(['Cancel', 'Flash'])
+        dlg.set_cancel_button(0)
+        dlg.set_default_button(1)
+        dlg.choose(self, None, self._on_flash_response, kernel)
 
-    def _on_flash_response(self, dlg, resp, kernel):
+    def _on_flash_response(self, dlg, result, kernel):
+        try:
+            idx = dlg.choose_finish(result)
+        except Exception:
+            idx = -1
         dlg.destroy()
-        if resp == Gtk.ResponseType.OK:
+        if idx == 1:
             self._start(lambda prog: self._run_job('flash', prog, kernel))
 
     def _start(self, worker):
@@ -415,8 +424,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.btn_restore.set_sensitive(False)
         self.btn_mark.set_sensitive(False)
         self.btn_reboot.set_sensitive(False)
-        self.progress.set_no_show_all(False)
-        self.progress.show()
+        self.progress.set_visible(True)
         self.progress.pulse()
         threading.Thread(target=worker, daemon=True).start()
 
@@ -428,8 +436,7 @@ class MainWindow(Gtk.ApplicationWindow):
         self.btn_restore.set_sensitive(ok)
         self.btn_mark.set_sensitive(ok)
         self.btn_reboot.set_sensitive(ok)
-        self.progress.hide()
-        self.progress.set_no_show_all(True)
+        self.progress.set_visible(False)
         self.refresh_status()
         return False
 
