@@ -147,28 +147,13 @@ def fetch_kernel(key_or_path, workdir, log, progress=None):
 
 def _set_active(log, other):
     """Make the OTHER slot the next boot target. Raises FlashError if
-    no supported tool exists (callers must NOT reboot in that case)."""
-    caps = device.markboot_caps(run_as_root=not device.is_root())
-    if caps['markboot']:
-        log('markboot: %s' % caps['markboot'])
-        if caps['set_active']:
-            _log_or_raise('set-active', *device.run_root(
-                ['markboot', '--set-active-boot', 'boot_' + other], log=log),
-                'markboot --set-active-boot failed')
-            return
-        log('markboot lacks --set-active-boot; trying bootctl')
-    if caps['bootctl']:
-        n = 0 if other == 'a' else 1
-        _log_or_raise('set-active', *device.run_root(
-            ['bootctl', 'set-active-boot-slot', str(n)], log=log),
-            'bootctl set-active-boot-slot failed')
-        return
-    raise FlashError('set-active',
-                     'no tool to switch the boot slot (need markboot '
-                     '--set-active-boot or bootctl). The other slot '
-                     'received the new image but the device will still '
-                     'boot the current slot. Send: which markboot; '
-                     'which bootctl')
+    no supported backend exists (callers must NOT reboot in that case).
+    Backends, in order: markboot --set-active-boot, runnable bootctl,
+    direct A/B BCB write to the misc partition (device.py)."""
+    try:
+        device.boot_control_set_active(other, log=log)
+    except device.DeviceError as e:
+        raise FlashError('set-active', str(e))
 
 
 def flash(log, kernel_key, workdir=None, progress=None):
@@ -204,12 +189,10 @@ def flash(log, kernel_key, workdir=None, progress=None):
 
     log('boot-control: preparing slot %s (attempt mode, tries=%d)'
         % (other, TRIES))
-    _log_or_raise('clear-successful', *device.run_root(
-        ['markboot', '--clear-successful', 'boot_' + other], log=log),
-        'markboot --clear-successful failed')
-    _log_or_raise('set-tries', *device.run_root(
-        ['markboot', '--set-tries', 'boot_' + other, str(TRIES)], log=log),
-        'markboot --set-tries failed')
+    try:
+        device.boot_control_prepare(other, tries=TRIES, log=log)
+    except device.DeviceError as e:
+        raise FlashError('boot-control', str(e))
     _set_active(log, other)
 
     try:
@@ -238,22 +221,11 @@ def restore(log, workdir=None):
                                                           parts['base']))
     log('restore: %s -> %s' % (bak, parts[other]))
     dd(log, bak, parts[other], 'restore')
-    n = 0 if slot == 'a' else 1
-    caps = device.markboot_caps(run_as_root=not device.is_root())
-    if caps['markboot']:
-        if caps['set_active']:
-            _log_or_raise('set-active', *device.run_root(
-                ['markboot', '--set-active-boot', 'boot_' + slot],
-                log=log), 'markboot --set-active-boot failed')
-        else:
-            log('markboot lacks --set-active-boot; trying bootctl')
-    if not (caps['markboot'] and caps['set_active']):
-        _log_or_raise('set-active', *device.run_root(
-            ['bootctl', 'set-active-boot-slot', str(n)], log=log),
-            'bootctl set-active-boot-slot failed')
-    _log_or_raise('set-successful', *device.run_root(
-        ['markboot', '--set-successful', 'boot_' + slot], log=log),
-        'markboot --set-successful failed')
+    try:
+        device.boot_control_set_active(slot, log=log)
+        device.boot_control_mark_successful(slot, log=log)
+    except device.DeviceError as e:
+        raise FlashError('boot-control', str(e))
     log('restore OK: current slot %s re-pinned as active+successful'
         % slot)
 
@@ -263,9 +235,10 @@ def mark_current_successful(log):
     slot, src = device.detect_slot()
     if not slot:
         raise FlashError('mark-successful', 'cannot detect the slot')
-    _log_or_raise('mark-successful', *device.run_root(
-        ['markboot', '--set-successful', 'boot_' + slot], log=log),
-        'markboot --set-successful failed')
+    try:
+        device.boot_control_mark_successful(slot, log=log)
+    except device.DeviceError as e:
+        raise FlashError('mark-successful', str(e))
     log('slot %s marked successful (locked)' % slot)
 
 
@@ -284,6 +257,8 @@ def probe_root():
         'euid': os.geteuid(),
         'kernel': platform.release(),
         'slot': device.detect_slot()[0],
+        'misc': device.misc_partition(),
+        'partlabels': sorted(device.lsblk_labels()),
         'markboot': device.markboot_caps(run_as_root=False),
         'python': platform.python_version(),
     }

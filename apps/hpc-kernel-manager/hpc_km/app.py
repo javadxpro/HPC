@@ -14,14 +14,16 @@ from . import flasher
 from .flasher import FlashError, KERNELS
 
 
-def human_kb(n):
+def human_size(n):
     if n is None:
         return '?'
     if n < 1024:
-        return '%d KB' % n
+        return '%d B' % n
     if n < 1024 * 1024:
-        return '%.1f MB' % (n / 1024)
-    return '%.2f GB' % (n / (1024 * 1024))
+        return '%.1f KB' % (n / 1024)
+    if n < 1024 * 1024 * 1024:
+        return '%.1f MB' % (n / (1024 * 1024))
+    return '%.2f GB' % (n / (1024 * 1024 * 1024))
 
 
 def title_bar(hb, text):
@@ -199,11 +201,11 @@ class MainWindow(Gtk.ApplicationWindow):
         # provide the same radio behavior (set_group since 4.0).
         self.radio355 = Gtk.CheckButton(label=KERNELS['355']['name']
                                         + '  (%s)'
-                                        % human_kb(KERNELS['355']['size']))
+                                        % human_size(KERNELS['355']['size']))
         self.radio355.set_active(True)
         self.radio190 = Gtk.CheckButton(label=KERNELS['190']['name']
                                         + '  (%s)'
-                                        % human_kb(KERNELS['190']['size']))
+                                        % human_size(KERNELS['190']['size']))
         self.radio190.set_group(self.radio355)
         card.append(self.radio355)
         card.append(self.radio190)
@@ -307,7 +309,7 @@ class MainWindow(Gtk.ApplicationWindow):
             return False
         GLib.idle_add(_do)
 
-    def refresh_status(self):
+    def refresh_status(self, log_diag=False):
         def _do():
             try:
                 st = device.full_status()
@@ -332,10 +334,24 @@ class MainWindow(Gtk.ApplicationWindow):
             elif st['markboot']:
                 mb += '  (no --set-active-boot)'
             L['markboot'].set_text(mb)
-            L['bootctl'].set_text(st['bootctl'] or 'not found')
+            bc = st['bootctl'] or 'not found'
+            if st['bootctl'] and not st.get('bootctl_runs'):
+                bc += '  (present but not runnable on this userland)'
+            elif st.get('bootctl_runs'):
+                bc += '  (runnable, current slot %s)' % st['bootctl_slot']
+            L['bootctl'].set_text(bc)
             cl = st['cmdline']
             self.cmdline_label.set_text(
                 'cmdline: ' + (cl[:300] + '…' if len(cl) > 300 else cl))
+            if log_diag:
+                # Full diagnostics in the Log card (selectable text) so
+                # they can be copied for support.
+                self.log('cmdline (full): ' + cl)
+                if st.get('partlabels'):
+                    self.log('partitions: ' + ', '.join(st['partlabels']))
+                self.log('boot base: %s' % (st['boot_base'] or 'none'))
+                if st.get('misc'):
+                    self.log('misc partition (A/B BCB): %s' % st['misc'])
             if st['root']:
                 self.root_banner.set_visible(False)
             else:
@@ -351,7 +367,7 @@ class MainWindow(Gtk.ApplicationWindow):
 
     def _on_refresh(self):
         self.log('--- refresh ---')
-        self.refresh_status()
+        self.refresh_status(log_diag=True)
 
     # -------------------------------------------------------------- jobs
     def _privilege_note(self):
