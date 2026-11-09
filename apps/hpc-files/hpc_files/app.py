@@ -494,11 +494,7 @@ class MainWindow(Gtk.ApplicationWindow):
             getattr(box, 'set_margin_' + m)(6)
 
         def mb(label, icon, action):
-            m = Gtk.ModelButton()
-            m.set_label(label)
-            if icon:
-                m.set_icon_name(icon)
-            m.set_action_name(action)
+            m = dialogs.menu_item(label=label, icon=icon, action=action)
             box.append(m)
             return m
 
@@ -514,16 +510,12 @@ class MainWindow(Gtk.ApplicationWindow):
             getattr(sbox, 'set_margin_' + m)(6)
         for key, label in (('name', 'Name'), ('size', 'Size'),
                            ('date', 'Date modified'), ('type', 'Type')):
-            m = Gtk.ModelButton()
-            m.set_label(label)
-            m.set_detailed_action_name('win.sort::%s' % key)
-            sbox.append(m)
+            sbox.append(dialogs.menu_item(
+                label=label, detailed='win.sort::%s' % key))
         sort_pop.set_child(sbox)
-        sm = Gtk.ModelButton()
-        sm.set_label('Sort by')
-        sm.set_icon_name('view-sort-descending-symbolic')
-        sm.set_submenu(sort_pop)
-        box.append(sm)
+        box.append(dialogs.menu_item(
+            label='Sort by', icon='view-sort-descending-symbolic',
+            submenu=sort_pop))
         mb('Ascending order', 'go-up-symbolic', 'win.ascending')
         box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
         mb('Copy path', 'edit-copy-symbolic', 'win.copy-path')

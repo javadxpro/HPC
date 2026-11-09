@@ -2,7 +2,7 @@
 # Build the hpc-kernel-manager .deb (ARM64, Droidian). No root needed.
 set -e
 cd "$(dirname "$0")"
-V=0.1.2
+V=0.1.3
 T=hpc-kernel-manager_${V}_arm64
 
 rm -rf build/$T

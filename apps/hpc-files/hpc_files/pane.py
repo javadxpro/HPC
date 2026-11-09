@@ -603,14 +603,8 @@ class PaneView(Gtk.Box):
         box.set_margin_end(6)
 
         def add(label, icon, cb, sensitive=True):
-            mb = Gtk.ModelButton()
-            mb.set_label(label)
-            if icon:
-                mb.set_icon_name(icon)
-            if cb is None:
-                mb.set_sensitive(False)
-            else:
-                mb.connect('clicked', lambda *_: cb())
+            mb = dialogs.menu_item(label=label, icon=icon, cb=cb,
+                                   sensitive=sensitive)
             box.append(mb)
 
         if it.trash:

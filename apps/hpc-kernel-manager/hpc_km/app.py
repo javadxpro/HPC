@@ -39,6 +39,44 @@ def title_bar(hb, text):
     return hb
 
 
+def menu_item(label='', icon=None, action=None, detailed=None,
+              submenu=None, cb=None, sensitive=True):
+    """GTK4-compatible popover menu item (ModelButton needs >=4.12;
+    on older GTK4 use a flat Button, and MenuButton for submenus)."""
+    if hasattr(Gtk, 'ModelButton'):
+        b = Gtk.ModelButton()
+        if label:
+            b.set_label(label)
+        if icon:
+            b.set_icon_name(icon)
+        if action:
+            b.set_action_name(action)
+        if detailed:
+            b.set_detailed_action_name(detailed)
+        if submenu is not None:
+            b.set_submenu(submenu)
+    else:
+        if submenu is not None:
+            b = Gtk.MenuButton(label=label or None)
+            if icon:
+                b.set_icon_name(icon)
+            b.set_popover(submenu)
+        else:
+            b = Gtk.Button(label=label or None)
+            if icon:
+                b.set_icon_name(icon)
+            if action:
+                b.set_action_name(action)
+            if detailed:
+                b.set_detailed_action_name(detailed)
+            b.set_halign(Gtk.Align.START)
+            b.add_css_class('flat')
+    b.set_sensitive(sensitive)
+    if cb is not None:
+        b.connect('clicked', lambda *_: cb())
+    return b
+
+
 class MainWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
@@ -74,10 +112,7 @@ class MainWindow(Gtk.ApplicationWindow):
             getattr(box, 'set_margin_' + m)(6)
         for label, action in (('Refresh status', 'win.refresh'),
                               ('About HPC Kernel Manager', 'win.about')):
-            b = Gtk.ModelButton()
-            b.set_label(label)
-            b.set_action_name(action)
-            box.append(b)
+            box.append(menu_item(label=label, action=action))
         pop.set_child(box)
         btn.set_popover(pop)
         hb.pack_end(btn)
