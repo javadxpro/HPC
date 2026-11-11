@@ -1,0 +1,12 @@
+// Allow passwordless exec of /usr/bin/hpc-kbd as root (pkexec).
+// The on-screen keyboard needs /dev/uinput (root). On a personal
+// device this makes the keyboard launchable with a single tap.
+// Remove this file to require authentication again.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.policykit.exec") {
+        var program = action.lookup("program");
+        if (program == "/usr/bin/hpc-kbd") {
+            return polkit.Result.YES;
+        }
+    }
+});

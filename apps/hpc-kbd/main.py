@@ -1,338 +1,248 @@
 #!/usr/bin/env python3
-"""hpc-kbd — a stable on-screen keyboard for phosh (Droidian).
+"""hpc-kbd 0.2.0 — on-screen keyboard for Droidian/Phosh (uinput backend).
 
-Replaces phosh-osk-stub. Owns sm.puri.OSK0 on the session bus (phosh's OSK
-contract) and emits keys through Wayland input-method-unstable-v2.
+A dep-free on-screen keyboard: emits keys through a Linux uinput
+virtual keyboard device. Only needs python3-gi + stdlib (no
+pywayland/cffi), so it installs with `dpkg -i` even when the Debian
+repositories are unreachable.
 
-  - GTK4 UI, layouts from layouts.json (fa default + qwert)
-  - built-in logging to ~/.local/state/hpc-kbd/hpc-kbd.log
-  - hides on IM deactivate / hardware keyboard events (phoc handles the
-    latter via phoc-device-state when a keyboard is present: the IM is
-    deactivated by the focused client)
+Privilege: needs write access to /dev/uinput. Run as root
+(`sudo -E hpc-kbd`) or tap "Run as root" in the app (pkexec; a
+polkit rule shipped in the deb allows passwordless exec of hpc-kbd).
+
+Layouts: EN (QWERTY), FA (Persian — output follows the system input
+source, set it to Persian in Settings > Region & Language), symbols.
 """
-import json
-import logging
 import os
 import sys
 from pathlib import Path
 
 import gi
-
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, GLib, Gtk  # noqa: E402
+from gi.repository import Gtk, Gio
 
-try:  # installed (deb) layout
-    from hpc_kbd.im_client import ImClient
-except ImportError:  # running from source tree
+try:
+    from hpc_kbd.uinput_kbd import UinputKeyboard, UinputError
+    from hpc_kbd import layouts
+except ImportError:  # running from the source tree
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from hpc_kbd.im_client import ImClient
+    from hpc_kbd.uinput_kbd import UinputKeyboard, UinputError
+    from hpc_kbd import layouts
 
 APP_ID = "org.hpc.Kbd"
-OSK_NAME = "sm.puri.OSK0"
-OSK_PATH = "/sm/puri/OSK0"
-
-STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "hpc-kbd"
-LOG_FILE = STATE_DIR / "hpc-kbd.log"
-LAYOUTS_FILE = Path(
-    os.environ.get("HPC_KBD_LAYOUTS", str(Path(__file__).resolve().parent / "layouts.json"))
-)
-
-log = logging.getLogger("hpc-kbd")
+APP_NAME = "HPC Keyboard"
 
 
-def setup_logging():
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    fmt = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-    fh = logging.FileHandler(LOG_FILE)
-    fh.setFormatter(fmt)
-    sh = logging.StreamHandler()
-    sh.setFormatter(fmt)
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    root.addHandler(fh)
-    root.addHandler(sh)
+def fix_wayland_env():
+    """When re-exec'd as root (pkexec/sudo), WAYLAND_DISPLAY may be
+    missing. Recover it from /run/user/*/wayland-* sockets."""
+    if os.environ.get("WAYLAND_DISPLAY"):
+        return
+    import glob
+    for sock in sorted(glob.glob("/run/user/*/wayland-*")):
+        d = os.path.dirname(sock)
+        os.environ["XDG_RUNTIME_DIR"] = d
+        os.environ["WAYLAND_DISPLAY"] = os.path.basename(sock)
+        break
 
 
 class KbdWindow(Gtk.ApplicationWindow):
-    """The keyboard UI. One grid of Gtk.Button per layout row."""
-
     def __init__(self, app):
         super().__init__(application=app)
-        self.app = app
-        self.set_title("HPC Kbd")
-        self.set_decorated(False)
-        self.set_skip_taskbar_hint(True)
-        self.set_default_size(1080, 320)
+        self.set_title(APP_NAME)
+        self.set_default_size(560, 440)
+        self.kbd = None
+        self.latched = set()
+        self.layout_name = "en"
+        self.page = "letters"  # or "symbols"
+        self.mod_buttons = {}  # modifier code -> button
 
-        self.layouts = json.loads(LAYOUTS_FILE.read_text())
-        self.current = self.layouts.get("default", list(self.layouts["layouts"].keys())[0])
-        self.shift = False
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        root.append(self._build_header())
+        self.grid = Gtk.Grid()
+        self.grid.set_column_spacing(4)
+        self.grid.set_row_spacing(4)
+        for m in ("top", "bottom", "start", "end"):
+            getattr(self.grid, "set_margin_" + m)(6)
+        root.append(self.grid)
+        self.set_child(root)
+        self._load_css()
+        self._rebuild()
+        self.connect("close-request", self._on_close)
+        self._open_uinput()
 
-        self._apply_css()
+    def _build_header(self):
+        hb = Gtk.HeaderBar()
+        hb.set_title_widget(Gtk.Label(label=APP_NAME))
+        if hasattr(hb, "set_show_title_buttons"):
+            hb.set_show_title_buttons(True)
+        return hb
 
-        self.grid = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        self.grid.set_margin_top(10)
-        self.grid.set_margin_bottom(10)
-        self.grid.set_margin_start(8)
-        self.grid.set_margin_end(8)
-        self.set_child(self.grid)
-        self.rebuild()
-
-    # -- UI -------------------------------------------------------------
-    def _apply_css(self):
+    def _load_css(self):
         css = b"""
-button.key { font-size: 20px; min-height: 52px; min-width: 44px; border-radius: 6px; }
-button.key:active { background: #ff9e00; }
-button.special { font-size: 18px; min-width: 64px; }
-button#shift { font-size: 22px; }
-"""
-        provider = Gtk.CssProvider()
-        provider.load_from_data(css)
-        Gtk.StyleContext.add_provider_for_display(
-            Gtk.Display.get_default(),
-            provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
+        button.latched { background-color: #3584e4; color: white; }
+        button { font-size: 15px; min-height: 44px; }
+        """
+        prov = Gtk.CssProvider()
+        prov.load_from_data(css)
+        disp = Gtk.Display.get_default()
+        if disp is not None:
+            Gtk.StyleContext.add_provider_for_display(
+                disp, prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-    def _layout(self):
-        return self.layouts["layouts"][self.current]
+    # ------------------------------------------------------------ layout
+    def _current_rows(self):
+        if self.page == "symbols":
+            return layouts.SYMBOLS
+        return layouts.LAYOUTS[self.layout_name]
 
-    def rebuild(self):
-        for child in self.grid.get_children():
+    def _rebuild(self):
+        child = self.grid.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
             self.grid.remove(child)
-        layout = self._layout()
-        for row in layout["rows"]:
-            rowbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-            rowbox.set_hexpand(True)
+            child = nxt
+        self.mod_buttons = {}
+        for r, row in enumerate(self._current_rows()):
+            col = 0
             for key in row:
-                btn = self._make_button(key)
-                rowbox.append(btn)
-            self.grid.append(rowbox)
-        # bottom control row: layout / shift are in the rows; keep a hint
-        self._refresh_labels()
-        self.app.log("layout rebuilt: %s shift=%s", self.current, self.shift)
+                w = key.get("w", 2)
+                btn = Gtk.Button(label=key["label"])
+                btn.set_hexpand(True)
+                btn.set_vexpand(True)
+                if "mod" in key:
+                    code = key["mod"]
+                    self.mod_buttons[code] = btn
+                    if code in self.latched:
+                        btn.add_css_class("latched")
+                    btn.connect("clicked", self._on_modifier, code)
+                elif "action" in key:
+                    btn.connect("clicked", self._on_action, key["action"])
+                else:
+                    btn.connect("clicked", self._on_key, key)
+                self.grid.attach(btn, col, r, w, 1)
+                col += w
 
-    def _make_button(self, key):
-        action = key.get("act", "char")
-        if action == "char":
-            label = key.get("shift") or key.get("base", "?")
-            if self.shift and key.get("shift"):
-                label = key["shift"]
-            btn = Gtk.Button(label=label)
-            btn.add_css_class("key")
-            w = int(key.get("w", 1))
-            btn.set_size_request(w * 46, 56)
-            btn.clicked.connect(lambda _b, k=key: self.on_key(k))
+    # -------------------------------------------------------------- input
+    def _open_uinput(self):
+        kbd = UinputKeyboard()
+        try:
+            kbd.open(layouts.all_keycodes())
+            self.kbd = kbd
+        except PermissionError:
+            self._ask_root("Permission denied opening /dev/uinput.")
+        except UinputError as e:
+            self._fatal(str(e))
+        except OSError as e:
+            self._fatal("Cannot open /dev/uinput: %s" % e)
+
+    def _ask_root(self, detail):
+        # Gtk.AlertDialog (GTK 4.18 API): new(msg), set_detail(),
+        # set_buttons(), choose() -> choose_finish() returns int index.
+        dlg = Gtk.AlertDialog.new("Keyboard needs root")
+        dlg.set_detail(
+            detail + "\n\nThe on-screen keyboard creates a virtual "
+            "keyboard device (/dev/uinput), which needs root.\n"
+            "Tap 'Run as root', or run in a terminal:\n"
+            "  sudo -E hpc-kbd")
+        dlg.set_buttons(["Quit", "Run as root"])
+        dlg.set_cancel_button(0)
+        dlg.set_default_button(1)
+        dlg.choose(self, None, self._on_root_choice, None)
+
+    def _on_root_choice(self, dlg, result, _data):
+        try:
+            idx = dlg.choose_finish(result)
+        except Exception:
+            idx = -1
+        dlg.destroy()
+        if idx == 1:
+            self._reexec_root()
         else:
-            names = {
-                "space": "␣",
-                "back": "⌫",
-                "enter": "↵",
-                "shift": "⇧",
-                "layout": self.current.upper(),
-            }
-            btn = Gtk.Button(label=names.get(action, action))
-            btn.add_css_class("key")
-            btn.add_css_class("special")
-            w = int(key.get("w", 2))
-            btn.set_size_request(w * 46, 56)
-            if action == "shift":
-                btn.set_name("shift")
-            btn.clicked.connect(lambda _b, a=action: self.on_action(a))
-        return btn
+            self.close()
 
-    def _refresh_labels(self):
-        # relabel shift-dependent keys without full rebuild cost: simplest is
-        # a targeted relabel by walking the grid
-        for row in self.grid.get_children():
-            for btn in row.get_children():
-                pass  # labels updated on next rebuild; cheap enough
-
-    # -- input ------------------------------------------------------------
-    def on_key(self, key):
-        if self.shift and key.get("shift"):
-            ch = key["shift"]
+    def _reexec_root(self):
+        exe = "/usr/bin/hpc-kbd"
+        if os.path.exists(exe):
+            cmd = ["pkexec", exe]
         else:
-            ch = key.get("base", "")
-        if not ch:
+            cmd = ["pkexec", sys.executable, os.path.abspath(sys.argv[0])]
+        try:
+            os.execvp(cmd[0], cmd)
+        except Exception as e:
+            self._fatal("pkexec failed: %s" % e)
+
+    def _fatal(self, msg):
+        dlg = Gtk.AlertDialog.new(APP_NAME)
+        dlg.set_detail(msg)
+        dlg.set_buttons(["OK"])
+        dlg.set_default_button(0)
+        dlg.choose(self, None, lambda d, r, _u: d.destroy(), None)
+
+    def _on_close(self, _win):
+        if self.kbd is not None:
+            self.kbd.close()
+            self.kbd = None
+        return False
+
+    def _on_modifier(self, btn, code):
+        if self.kbd is None:
             return
-        self.app.log("key press: %r (shift=%s)", ch, self.shift)
-        self.app.im.send_text(ch)
-        if self.shift:
-            self.shift = False
-            self.rebuild()
+        if code in self.latched:
+            self.latched.discard(code)
+            self.kbd.release(code)
+            btn.remove_css_class("latched")
+        else:
+            self.latched.add(code)
+            self.kbd.press(code)
+            btn.add_css_class("latched")
 
-    def on_action(self, action):
-        if action == "space":
-            self.app.log("space")
-            self.app.im.send_text(" ")
-        elif action == "back":
-            self.app.log("backspace")
-            self.app.im.backspace()
-        elif action == "enter":
-            self.app.log("enter")
-            self.app.im.send_text("\n")
-        elif action == "shift":
-            self.shift = not self.shift
-            self.app.log("shift toggle -> %s", self.shift)
-            self.rebuild()
+    def _on_action(self, _btn, action):
+        if action == "page":
+            self.page = "symbols" if self.page == "letters" else "letters"
         elif action == "layout":
-            names = list(self.layouts["layouts"].keys())
-            idx = (names.index(self.current) + 1) % len(names)
-            self.current = names[idx]
-            self.app.log("layout switch -> %s", self.current)
-            self.rebuild()
+            self.layout_name = "fa" if self.layout_name == "en" else "en"
+        self._rebuild()
 
-    # -- visibility ---------------------------------------------------------
-    def show_osk(self):
-        self.present()
-        self.show()
-        self.app.log("window shown")
-
-    def hide_osk(self):
-        self.hide()
-        self.app.log("window hidden")
-
-
-class HpcKbdApp(Gtk.Application):
-    def __init__(self):
-        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.NON_UNIQUE)
-        self.win = None
-        self.visible = False
-        self.im = None
-        self._fd_source = None
-
-    # -- logging helper -----------------------------------------------------
-    def log(self, msg, *args):
-        log.info(msg, *args)
-
-    # -- IM events (called on the main loop) ---------------------------------
-    def on_im_activate(self):
-        self.log("OSK: activate -> show")
-        self.win.show_osk()
-        self._set_visible(True)
-
-    def on_im_deactivate(self):
-        self.log("OSK: deactivate -> hide")
-        self.win.hide_osk()
-        self._set_visible(False)
-
-    def on_im_surrounding(self, text, cursor, anchor):
-        self.log("surrounding %r @%d/%d", text[:40], cursor, anchor)
-
-    # -- D-Bus (sm.puri.OSK0) -------------------------------------------------
-    def _set_visible(self, value):
-        self.visible = value
-        try:
-            self.osk_iface.set_property("Visible", value)
-        except Exception:  # not registered yet
-            pass
-
-    def dbus_set_visible(self, method, params):
-        show = params[0]
-        self.log("D-Bus SetVisible(%s)", show)
-        if show:
-            self.win.show_osk()
-        else:
-            self.win.hide_osk()
-        self._set_visible(bool(show))
-        return [GLib.Variant("b", self.visible)]
-
-    def build_osk_iface(self):
-        iface = Gio.DBusInterfaceSkeleton()
-        iface.set_name(OSK_NAME)
-
-        prop = Gio.DBusPropertiesSkeleton()
-        prop.add_property("Visible", "b", self.visible)
-        iface.add_properties(prop)
-
-        iface.add_method(
-            "SetVisible",
-            ["b"],
-            None,
-            self.dbus_set_visible,
-            flags=0,
-        )
-        return iface
-
-    def on_bus_acquired(self, app, connection):
-        self.log("session bus acquired")
-        try:
-            self.osk_iface = self.build_osk_iface()
-            connection.register_object(OSK_PATH, self.osk_iface, None)
-            self.log("object %s registered on app connection", OSK_PATH)
-            # Own the phosh OSK name on THIS connection — the one that
-            # actually holds the object. phosh introspects the connection
-            # that owns sm.puri.OSK0; if the name and the object live on
-            # different connections, phosh sees an empty interface and
-            # never shows the keyboard.
-            Gio.bus_own_name_on_connection(
-                connection,
-                OSK_NAME,
-                Gio.BusNameOwnerFlags.REPLACE,
-                lambda conn, name: self.log("owned D-Bus name %s", name),
-                lambda conn, name: self.log("LOST D-Bus name %s", name),
-                None,
-            )
-        except Exception as e:
-            self.log("ERROR registering OSK object: %s", e)
-
-    # -- Wayland IM -------------------------------------------------------------
-    def start_im(self):
-        self.im = ImClient(
-            on_activate=self.on_im_activate,
-            on_deactivate=self.on_im_deactivate,
-            on_surrounding=self.on_im_surrounding,
-        )
-        try:
-            self.im.connect()
-        except Exception as e:
-            self.log("FATAL: cannot connect Wayland display: %s", e)
+    def _on_key(self, _btn, key):
+        if self.kbd is None:
             return
-        fd = self.im.get_fd()
-        if fd is not None:
-            self._fd_source = GLib.unix_fd_add_watch(
-                fd,
-                GLib.IOCondition.IN,
-                lambda *_a: (self.im.flush(), False)[1],
-            )
-            self.log("IM display fd %d watched", fd)
+        codes = key.get("codes", [])
+        # press any modifiers this key needs that are not already latched
+        temp = [c for c in codes
+                if c in layouts.MODIFIERS and c not in self.latched]
+        for c in temp:
+            self.kbd.press(c)
+        for c in codes:
+            if c not in layouts.MODIFIERS:
+                self.kbd.tap(c)
+        for c in reversed(temp):
+            self.kbd.release(c)
+        # one-shot: release latched modifiers after a key
+        if self.latched:
+            for c in list(self.latched):
+                self.kbd.release(c)
+            self.latched.clear()
+            for btn in self.mod_buttons.values():
+                btn.remove_css_class("latched")
 
-        # Diagnostic: if the compositor never advertised the IMv2 global,
-        # keys can never be delivered — say so loudly in the log.
-        def _im_check():
-            if self.im is None or self.im.im is None:
-                self.log(
-                    "WARN: zwp_input_method_manager_v2 still not seen after 5s. "
-                    "Keys will NOT work until the compositor advertises it. "
-                    "Check with: wayland-info | grep -i input_method"
-                )
-            return False
 
-        GLib.timeout_add_seconds(5, _im_check)
-
-    # -- Gtk.Application vfunc ---------------------------------------------------
-    def do_startup(self):
-        Gtk.Application.do_startup(self)
-        self.win = KbdWindow(self)
-        self.start_im()
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID,
+                         flags=Gio.ApplicationFlags.NON_UNIQUE)
 
     def do_activate(self):
-        self.log("activate (startup or user launch)")
-        # Don't force-show: the IM activate event / phosh SetVisible drives
-        # visibility. Showing on plain launch helps first-run testing.
-        if not self.visible:
-            self.win.show_osk()
-            self._set_visible(True)
+        win = self.props.active_window
+        if win is None:
+            win = KbdWindow(self)
+        win.present()
 
 
 def main():
-    setup_logging()
-    log.info("hpc-kbd starting (pid=%d, layouts=%s)", os.getpid(), LAYOUTS_FILE)
-    app = HpcKbdApp()
-    # NOTE: sm.puri.OSK0 is owned in on_bus_acquired() on the same
-    # connection that registers the /sm/puri/OSK0 object.
-    return app.run(None)
+    fix_wayland_env()
+    app = App()
+    return app.run(sys.argv)
 
 
 if __name__ == "__main__":

@@ -1,12 +1,14 @@
 Package: hpc-kbd
-Version: 0.1.1
+Version: 0.2.0
 Architecture: all
 Maintainer: HPC <hpc@local>
 Section: utils
 Priority: optional
-Depends: python3, python3-gi, gir1.2-gtk-4.0, python3-pywayland, python3-cffi, libwayland-client0
-Description: Stable on-screen keyboard for phosh (Droidian)
- Replaces phosh-osk-stub for the Vayu. Emits keys through Wayland
- input-method-unstable-v2, owns sm.puri.OSK0 on the session bus,
- Farsi (standard IRAN) + QWERTY layouts, built-in logging to
- ~/.local/state/hpc-kbd/hpc-kbd.log.
+Depends: python3, python3-gi, gir1.2-gtk-4.0
+Description: On-screen keyboard for Droidian/Phosh (uinput backend)
+ Dep-free on-screen keyboard: emits keys through a Linux uinput
+ virtual keyboard (no pywayland/cffi), so it installs with dpkg -i
+ even when the Debian repositories are unreachable. EN (QWERTY),
+ FA (Persian) and symbol layouts. Needs root for /dev/uinput
+ (sudo -E hpc-kbd, or tap "Run as root" in the app; a polkit rule
+ allows passwordless exec of hpc-kbd).

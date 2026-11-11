@@ -1,11 +1,8 @@
 [Desktop Entry]
 Type=Application
 Name=HPC Keyboard
-Comment=Stable on-screen keyboard (phosh OSK replacement)
+Comment=On-screen keyboard (uinput, EN/FA layouts)
 Exec=/usr/bin/hpc-kbd
 Icon=input-keyboard
-X-GNOME-Provides=inputmethod
-OnlyShowIn=Phosh
-NoDisplay=true
-X-GNOME-AutoRestart=true
+Terminal=false
 Categories=Utility;
