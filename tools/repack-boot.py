@@ -38,6 +38,7 @@ The script:
 If any check fails, it exits non-zero WITHOUT writing the output,
 so you can never produce a garbage boot image.
 """
+import gzip
 import struct
 import sys
 
@@ -61,6 +62,18 @@ def kernel_kind(data):
     if data[:2] == GZIP_MAGIC:
         return 'gzip'
     return 'unknown'
+
+
+def _gunzip_valid_image(blob):
+    """True if blob is a gzip stream that decompresses to a valid
+    ARM64 Image (magic at offset 56)."""
+    try:
+        dec = gzip.decompress(blob)
+    except Exception:
+        return False
+    return (len(dec) >= 60 and
+            struct.unpack_from('<I', dec, ARM64_MAGIC_OFF)[0] ==
+            ARM64_IMAGE_MAGIC)
 
 # packed header field offsets (boot_img_hdr_v2, the superset layout)
 F_KERNEL_SIZE = 8
@@ -190,7 +203,9 @@ def magic_ok(data, off, kind):
         return False
     head = data[off:off + 8]
     if kind == 'kernel':
-        return kernel_kind(data[off:]) == 'arm64-image'
+        # 'gzip' is accepted here; parse_image() does the deep check
+        # (decompress + magic) on the full kernel section.
+        return kernel_kind(data[off:]) in ('arm64-image', 'gzip')
     if kind == 'dtb':
         return head.startswith(DTB_MAGIC)
     return any(head.startswith(m) for m in RAMDISK_MAGICS)
@@ -202,11 +217,13 @@ def parse_image(data):
     khead = data[o['kernel']:o['kernel'] + 128]
     kk = kernel_kind(khead)
     if kk == 'gzip':
-        die('the ORIGINAL kernel in this boot image is gzip-compressed '
-            '(zImage). This tool expects an uncompressed ARM64 Image, '
-            'which is what devices with a separate ramdisk+dtb use. '
-            'Aborting.')
-    if kk != 'arm64-image':
+        # Compressed kernel: verify it decompresses to a valid ARM64
+        # Image. main() will gzip-compress the new kernel to match.
+        kblob = data[o['kernel']:o['kernel'] + h['kernel_size']]
+        if not _gunzip_valid_image(kblob):
+            die('the ORIGINAL kernel is gzip-compressed but does not '
+                'decompress to a valid ARM64 Image. Aborting.')
+    elif kk != 'arm64-image':
         die('the ORIGINAL kernel in this boot image is not a '
             'recognizable ARM64 Image. Aborting.')
     for off, kind in ((o['kernel'], 'kernel'), (o['ramdisk'], 'ramdisk'),
@@ -316,6 +333,12 @@ def main():
             'is this the output of "make Image"?')
 
     h, sect, o = parse_image(data)
+    if kernel_kind(sect['kernel']) == 'gzip':
+        # Original kernel is gzip-compressed; compress the new one to
+        # match the format the bootloader expects.
+        new_kernel = gzip.compress(new_kernel, compresslevel=9, mtime=0)
+        print('original kernel is gzip-compressed; new kernel '
+              'gzip-compressed to %d bytes' % len(new_kernel))
     print('--- original boot image ---')
     print('header version : %d' % h['ver'])
     print('page size      : %d' % h['page_size'])
